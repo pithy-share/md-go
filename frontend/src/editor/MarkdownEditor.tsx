@@ -26,6 +26,7 @@ interface SourceMarkdownEditorProps extends MarkdownEditorProps {
 }
 
 export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorReady }: MarkdownEditorProps) {
+  const lastInternalMarkdownRef = useRef(markdown);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -67,7 +68,9 @@ export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorRe
       onOutlineChange(extractOutline(editor));
     },
     onUpdate({ editor }) {
-      onChange(htmlToMarkdown(editor.getHTML()));
+      const nextMarkdown = htmlToMarkdown(editor.getHTML());
+      lastInternalMarkdownRef.current = nextMarkdown;
+      onChange(nextMarkdown);
       onOutlineChange(extractOutline(editor));
     },
     immediatelyRender: false,
@@ -80,9 +83,14 @@ export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorRe
 
   useEffect(() => {
     if (!editor) return;
+    if (lastInternalMarkdownRef.current === markdown) return;
     const incomingHtml = markdownToHtml(markdown);
-    if (normalizeHtml(editor.getHTML()) === normalizeHtml(incomingHtml)) return;
+    if (normalizeHtml(editor.getHTML()) === normalizeHtml(incomingHtml)) {
+      lastInternalMarkdownRef.current = markdown;
+      return;
+    }
     editor.commands.setContent(incomingHtml, { emitUpdate: false });
+    lastInternalMarkdownRef.current = markdown;
     onOutlineChange(extractOutline(editor));
   }, [editor, markdown, onOutlineChange]);
 
