@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
@@ -16,6 +17,7 @@ import type { OutlineItem } from '../types/app';
 
 interface MarkdownEditorProps {
   markdown: string;
+  documentPath: string;
   onChange: (markdown: string) => void;
   onOutlineChange: (outline: OutlineItem[]) => void;
   onEditorReady: (editor: Editor | null) => void;
@@ -25,8 +27,29 @@ interface SourceMarkdownEditorProps extends MarkdownEditorProps {
   onSourceReady: (textarea: HTMLTextAreaElement | null) => void;
 }
 
-export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorReady }: MarkdownEditorProps) {
+const MarkdownImage = Image.extend({
+  addAttributes() {
+    return {
+      ...(this.parent?.() ?? {}),
+      dataMarkdownSrc: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('data-markdown-src'),
+        renderHTML: (attributes: { dataMarkdownSrc?: string | null }) => {
+          if (!attributes.dataMarkdownSrc) return {};
+          return { 'data-markdown-src': attributes.dataMarkdownSrc };
+        },
+      },
+    };
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
+  },
+});
+
+export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChange, onEditorReady }: MarkdownEditorProps) {
   const lastInternalMarkdownRef = useRef(markdown);
+  const lastDocumentPathRef = useRef(documentPath);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -38,7 +61,7 @@ export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorRe
         defaultProtocol: 'https',
         openOnClick: false,
       }),
-      Image.configure({
+      MarkdownImage.configure({
         allowBase64: true,
       }),
       Table.configure({
@@ -56,7 +79,7 @@ export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorRe
         placeholder: 'Start writing...',
       }),
     ],
-    content: markdownToHtml(markdown),
+    content: markdownToHtml(markdown, documentPath),
     editorProps: {
       attributes: {
         class: 'prose-editor',
@@ -83,16 +106,18 @@ export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorRe
 
   useEffect(() => {
     if (!editor) return;
-    if (lastInternalMarkdownRef.current === markdown) return;
-    const incomingHtml = markdownToHtml(markdown);
+    if (lastInternalMarkdownRef.current === markdown && lastDocumentPathRef.current === documentPath) return;
+    const incomingHtml = markdownToHtml(markdown, documentPath);
     if (normalizeHtml(editor.getHTML()) === normalizeHtml(incomingHtml)) {
       lastInternalMarkdownRef.current = markdown;
+      lastDocumentPathRef.current = documentPath;
       return;
     }
     editor.commands.setContent(incomingHtml, { emitUpdate: false });
     lastInternalMarkdownRef.current = markdown;
+    lastDocumentPathRef.current = documentPath;
     onOutlineChange(extractOutline(editor));
-  }, [editor, markdown, onOutlineChange]);
+  }, [editor, markdown, documentPath, onOutlineChange]);
 
   return (
     <div className="editor-shell">

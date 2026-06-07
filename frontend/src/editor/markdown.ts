@@ -18,6 +18,19 @@ const turndown = new TurndownService({
 
 turndown.use(gfm);
 
+turndown.addRule('imageOriginalSource', {
+  filter(node) {
+    return node.nodeName === 'IMG' && node instanceof HTMLElement && Boolean(node.dataset.markdownSrc);
+  },
+  replacement(_content, node) {
+    const element = node as HTMLImageElement;
+    const alt = element.getAttribute('alt') ?? '';
+    const title = element.getAttribute('title');
+    const src = element.dataset.markdownSrc ?? element.getAttribute('src') ?? '';
+    return title ? `![${alt}](${src} "${title}")` : `![${alt}](${src})`;
+  },
+});
+
 turndown.addRule('taskListItems', {
   filter(node) {
     return node.nodeName === 'LI' && node instanceof HTMLElement && node.dataset.type === 'taskItem';
@@ -25,7 +38,10 @@ turndown.addRule('taskListItems', {
   replacement(content, node) {
     const element = node as HTMLElement;
     const checked = element.getAttribute('data-checked') === 'true' ? 'x' : ' ';
-    return `- [${checked}] ${content.trim()}\n`;
+    const lines = content.trim().split('\n');
+    const firstLine = lines.shift()?.trim() ?? '';
+    const rest = lines.length > 0 ? `\n${lines.map((line) => (line ? `  ${line}` : line)).join('\n')}` : '';
+    return `- [${checked}] ${firstLine}${rest}\n`;
   },
 });
 
@@ -40,14 +56,15 @@ turndown.addRule('inlineCodePreserve', {
   },
 });
 
-export function markdownToHtml(markdown: string): string {
+export function markdownToHtml(markdown: string, documentPath = ''): string {
   const source = markdown.trim().length > 0 ? markdown : '# Untitled\n\n';
   const html = marked.parse(source);
-  return typeof html === 'string' ? html : '';
+  if (typeof html !== 'string') return '';
+  return prepareEditorHtml(html, documentPath);
 }
 
 export function htmlToMarkdown(html: string): string {
-  const markdown = turndown.turndown(html);
+  const markdown = turndown.turndown(prepareMarkdownHtml(html));
   return normalizeMarkdown(markdown);
 }
 
@@ -76,6 +93,192 @@ export function markdownToExportHtml(markdown: string, title: string): string {
 ${body}
 </body>
 </html>`;
+}
+
+const LOCAL_IMAGE_ENDPOINT = '/local-image';
+const BLOCK_TAG_NAMES = new Set([
+  'ADDRESS',
+  'ARTICLE',
+  'ASIDE',
+  'BLOCKQUOTE',
+  'DIV',
+  'DL',
+  'FIGURE',
+  'FOOTER',
+  'FORM',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'HEADER',
+  'HR',
+  'OL',
+  'P',
+  'PRE',
+  'SECTION',
+  'TABLE',
+  'UL',
+]);
+
+function prepareEditorHtml(html: string, documentPath: string): string {
+  const parsed = parseHtml(html);
+  prepareEditorImages(parsed, documentPath);
+  prepareEditorTaskLists(parsed);
+  return parsed.body.innerHTML;
+}
+
+function prepareMarkdownHtml(html: string): string {
+  const parsed = parseHtml(html);
+  restoreMarkdownImageSources(parsed);
+  prepareMarkdownTaskLists(parsed);
+  return parsed.body.innerHTML;
+}
+
+function parseHtml(html: string): Document {
+  return new DOMParser().parseFromString(html, 'text/html');
+}
+
+function prepareEditorImages(document: Document, documentPath: string): void {
+  document.querySelectorAll('img').forEach((image) => {
+    const source = image.getAttribute('src')?.trim() ?? '';
+    if (!shouldProxyLocalImage(source, documentPath)) return;
+
+    image.setAttribute('data-markdown-src', source);
+    image.setAttribute('src', createLocalImageUrl(source, documentPath));
+  });
+}
+
+function restoreMarkdownImageSources(document: Document): void {
+  document.querySelectorAll('img[data-markdown-src]').forEach((image) => {
+    const originalSource = image.getAttribute('data-markdown-src');
+    if (!originalSource) return;
+    image.setAttribute('src', originalSource);
+  });
+}
+
+function shouldProxyLocalImage(source: string, documentPath: string): boolean {
+  if (!source) return false;
+  const lowerSource = source.toLowerCase();
+  if (
+    lowerSource.startsWith('http://') ||
+    lowerSource.startsWith('https://') ||
+    lowerSource.startsWith('data:') ||
+    lowerSource.startsWith('blob:') ||
+    lowerSource.startsWith(`${LOCAL_IMAGE_ENDPOINT}?`)
+  ) {
+    return false;
+  }
+  return Boolean(documentPath) || isAbsoluteLocalPath(source) || lowerSource.startsWith('file:');
+}
+
+function isAbsoluteLocalPath(source: string): boolean {
+  return /^[a-z]:[\\/]/i.test(source) || source.startsWith('\\\\') || source.startsWith('/');
+}
+
+function createLocalImageUrl(source: string, documentPath: string): string {
+  const params = new URLSearchParams({ src: source });
+  if (documentPath) params.set('document', documentPath);
+  return `${LOCAL_IMAGE_ENDPOINT}?${params.toString()}`;
+}
+
+function prepareEditorTaskLists(document: Document): void {
+  const inputs = Array.from(document.querySelectorAll('li input[type="checkbox"]')) as HTMLInputElement[];
+
+  inputs.forEach((input) => {
+    const listItem = input.closest('li');
+    const list = listItem?.parentElement;
+    if (!listItem || list?.tagName !== 'UL') return;
+
+    const checked = input.checked || input.hasAttribute('checked');
+    list.setAttribute('data-type', 'taskList');
+    listItem.setAttribute('data-type', 'taskItem');
+    listItem.setAttribute('data-checked', checked ? 'true' : 'false');
+    input.remove();
+
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.setAttribute('type', 'checkbox');
+    if (checked) checkbox.setAttribute('checked', 'checked');
+    label.appendChild(checkbox);
+    label.appendChild(document.createElement('span'));
+
+    const content = document.createElement('div');
+    while (listItem.firstChild) {
+      content.appendChild(listItem.firstChild);
+    }
+    normalizeTaskItemContent(document, content);
+    listItem.appendChild(label);
+    listItem.appendChild(content);
+  });
+}
+
+function normalizeTaskItemContent(document: Document, content: HTMLElement): void {
+  const normalizedNodes: Node[] = [];
+  let paragraph: HTMLParagraphElement | null = null;
+
+  const flushParagraph = () => {
+    if (!paragraph) return;
+    normalizedNodes.push(paragraph);
+    paragraph = null;
+  };
+
+  const appendInlineNode = (node: Node) => {
+    if (!paragraph) paragraph = document.createElement('p');
+    paragraph.appendChild(node);
+  };
+
+  while (content.firstChild) {
+    const node = content.firstChild;
+    if (node.nodeType === Node.TEXT_NODE && !node.textContent?.trim() && !paragraph) {
+      content.removeChild(node);
+      continue;
+    }
+    if (node instanceof HTMLElement && BLOCK_TAG_NAMES.has(node.tagName)) {
+      flushParagraph();
+      normalizedNodes.push(node);
+      content.removeChild(node);
+      continue;
+    }
+    content.removeChild(node);
+    appendInlineNode(node);
+  }
+
+  flushParagraph();
+  if (normalizedNodes.length === 0) {
+    normalizedNodes.push(document.createElement('p'));
+  }
+  normalizedNodes.forEach((node) => content.appendChild(node));
+}
+
+function prepareMarkdownTaskLists(document: Document): void {
+  document.querySelectorAll('li[data-type="taskItem"]').forEach((listItem) => {
+    if (!(listItem instanceof HTMLElement)) return;
+    const input = findDirectTaskCheckbox(listItem);
+    const checked = listItem.getAttribute('data-checked') === 'true' || Boolean(input?.checked) || Boolean(input?.hasAttribute('checked'));
+    listItem.setAttribute('data-checked', checked ? 'true' : 'false');
+
+    const label = findDirectChild(listItem, 'LABEL');
+    label?.remove();
+
+    const content = findDirectChild(listItem, 'DIV');
+    if (!content) return;
+    while (content.firstChild) {
+      listItem.insertBefore(content.firstChild, content);
+    }
+    content.remove();
+  });
+}
+
+function findDirectTaskCheckbox(listItem: Element): HTMLInputElement | null {
+  const label = findDirectChild(listItem, 'LABEL');
+  const input = label?.querySelector('input[type="checkbox"]');
+  return input instanceof HTMLInputElement ? input : null;
+}
+
+function findDirectChild(element: Element, tagName: string): HTMLElement | null {
+  return Array.from(element.children).find((child) => child.tagName === tagName) as HTMLElement | undefined ?? null;
 }
 
 function normalizeMarkdown(markdown: string): string {

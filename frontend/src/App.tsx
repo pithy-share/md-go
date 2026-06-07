@@ -277,6 +277,7 @@ function App() {
           {config.editorMode === 'source' ? (
             <SourceMarkdownEditor
               markdown={documentState.markdown}
+              documentPath={documentState.path}
               onChange={handleMarkdownChange}
               onOutlineChange={setOutline}
               onEditorReady={setEditor}
@@ -285,6 +286,7 @@ function App() {
           ) : (
             <MarkdownEditor
               markdown={documentState.markdown}
+              documentPath={documentState.path}
               onChange={handleMarkdownChange}
               onOutlineChange={setOutline}
               onEditorReady={setEditor}
