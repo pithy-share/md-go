@@ -17,11 +17,12 @@ import {
   normalizeConfig,
   resolveTheme,
 } from './state/documentStore';
-import type { AppConfig, DocumentPayload, DocumentState, OutlineItem, RecentDocument, SaveResult } from './types/app';
+import type { AppConfig, DocumentPayload, DocumentState, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
 import {
   ExportHTML,
   LoadConfig,
   OpenDocument,
+  OpenFolder,
   ReadDocument,
   SaveConfig,
   SaveDocument,
@@ -33,6 +34,7 @@ import { models } from '../wailsjs/go/models';
 function App() {
   const [documentState, setDocumentState] = useState<DocumentState>(() => createEmptyDocument());
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
+  const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([]);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -123,6 +125,32 @@ function App() {
     } catch (error) {
       console.error(error);
       setMessage('Open failed');
+    }
+  }, [confirmDiscard, loadDocument]);
+
+  const handleOpenFolder = useCallback(async () => {
+    try {
+      const nextWorkspace = await OpenFolder();
+      if (!nextWorkspace?.rootPath) return;
+      setWorkspace({ ...nextWorkspace, files: nextWorkspace.files ?? [] });
+      if (!config.showSidebar) {
+        void persistConfig({ ...config, showSidebar: true });
+      }
+      setMessage(`Opened folder ${nextWorkspace.name || displayNameFromPath(nextWorkspace.rootPath)}`);
+    } catch (error) {
+      console.error(error);
+      setMessage('Open folder failed');
+    }
+  }, [config, persistConfig]);
+
+  const handleOpenWorkspaceFile = useCallback(async (path: string) => {
+    if (!confirmDiscard()) return;
+    try {
+      const payload = await ReadDocument(path);
+      loadDocument(payload);
+    } catch (error) {
+      console.error(error);
+      setMessage('Workspace file is unavailable');
     }
   }, [confirmDiscard, loadDocument]);
 
@@ -228,6 +256,7 @@ function App() {
         isDirty={documentState.isDirty}
         onNew={handleNew}
         onOpen={handleOpen}
+        onOpenFolder={handleOpenFolder}
         onSave={handleSave}
         onSaveAs={handleSaveAs}
         onExport={handleExport}
@@ -239,8 +268,10 @@ function App() {
         {config.showSidebar && (
           <Sidebar
             currentPath={documentState.path}
+            workspace={workspace}
             recentDocuments={recentDocuments}
             outline={outline}
+            onOpenWorkspaceFile={handleOpenWorkspaceFile}
             onOpenRecent={handleOpenRecent}
             onJumpToHeading={handleJumpToHeading}
           />

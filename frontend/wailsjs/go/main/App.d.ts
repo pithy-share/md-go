@@ -12,6 +12,8 @@ export function NewDocument():Promise<models.DocumentMeta>;
 
 export function OpenDocument():Promise<models.DocumentPayload>;
 
+export function OpenFolder():Promise<models.Workspace>;
+
 export function ReadDocument(arg1:string):Promise<models.DocumentPayload>;
 
 export function SaveConfig(arg1:models.AppConfig):Promise<models.AppConfig>;

@@ -26,6 +26,21 @@ export interface RecentDocument {
   lastOpenedAt: string;
 }
 
+export interface WorkspaceFile {
+  path: string;
+  name: string;
+  relativePath: string;
+  depth: number;
+  size: number;
+  modifiedAt: string;
+}
+
+export interface Workspace {
+  rootPath: string;
+  name: string;
+  files: WorkspaceFile[];
+}
+
 export interface AppConfig {
   theme: ThemePreference;
   autoSave: boolean;

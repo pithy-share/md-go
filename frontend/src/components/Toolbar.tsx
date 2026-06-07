@@ -5,6 +5,7 @@ import {
   Columns3,
   Download,
   FilePlus2,
+  FileText,
   FolderOpen,
   Heading1,
   Heading2,
@@ -37,6 +38,7 @@ interface ToolbarProps {
   isDirty: boolean;
   onNew: () => void;
   onOpen: () => void;
+  onOpenFolder: () => void;
   onSave: () => void;
   onSaveAs: () => void;
   onExport: () => void;
@@ -53,6 +55,7 @@ export function Toolbar({
   isDirty,
   onNew,
   onOpen,
+  onOpenFolder,
   onSave,
   onSaveAs,
   onExport,
@@ -91,6 +94,9 @@ export function Toolbar({
           <FilePlus2 size={18} />
         </button>
         <button className="icon-button" title="Open document" onClick={onOpen}>
+          <FileText size={18} />
+        </button>
+        <button className="icon-button" title="Open folder" onClick={onOpenFolder}>
           <FolderOpen size={18} />
         </button>
         <button className={`icon-button ${isDirty ? 'attention' : ''}`} title="Save" onClick={onSave}>

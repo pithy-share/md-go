@@ -111,6 +111,10 @@
   flex: 1;
 }
 
+.workspace-section {
+  max-height: 38%;
+}
+
 .sidebar-heading {
   align-items: center;
   color: var(--muted);

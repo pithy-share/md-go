@@ -3,8 +3,10 @@ package files
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,9 +17,20 @@ import (
 )
 
 var markdownFilters = []runtime.FileFilter{
-	{DisplayName: "Markdown Files (*.md;*.markdown;*.mdown)", Pattern: "*.md;*.markdown;*.mdown"},
+	{DisplayName: "Markdown Files (*.md;*.markdown;*.mdown;*.mkd)", Pattern: "*.md;*.markdown;*.mdown;*.mkd"},
 	{DisplayName: "Text Files (*.txt)", Pattern: "*.txt"},
 	{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+}
+
+var skippedWorkspaceDirs = map[string]struct{}{
+	".git":         {},
+	".hg":          {},
+	".svn":         {},
+	".wails-seed":  {},
+	"build":        {},
+	"dist":         {},
+	"node_modules": {},
+	"vendor":       {},
 }
 
 // Service handles document IO and file picker integration.
@@ -59,6 +72,95 @@ func (s *Service) OpenDocument() (models.DocumentPayload, error) {
 	}
 
 	return s.ReadDocument(path)
+}
+
+func (s *Service) OpenFolder() (models.Workspace, error) {
+	if s.ctx == nil {
+		return models.Workspace{}, errors.New("application context is not ready")
+	}
+
+	path, err := runtime.OpenDirectoryDialog(s.ctx, runtime.OpenDialogOptions{
+		Title: "Open Folder",
+	})
+	if err != nil {
+		return models.Workspace{}, err
+	}
+	if path == "" {
+		return models.Workspace{}, nil
+	}
+
+	return s.ScanFolder(path)
+}
+
+func (s *Service) ScanFolder(path string) (models.Workspace, error) {
+	if strings.TrimSpace(path) == "" {
+		return models.Workspace{}, errors.New("path is required")
+	}
+
+	root := filepath.Clean(path)
+	info, err := os.Stat(root)
+	if err != nil {
+		return models.Workspace{}, err
+	}
+	if !info.IsDir() {
+		return models.Workspace{}, errors.New("path is not a folder")
+	}
+
+	workspace := models.Workspace{
+		RootPath: root,
+		Name:     filepath.Base(root),
+		Files:    []models.WorkspaceFile{},
+	}
+
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if entry.IsDir() {
+			if path == root {
+				return nil
+			}
+			if shouldSkipWorkspaceDir(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if !isWorkspaceMarkdownFile(path) {
+			return nil
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return nil
+		}
+
+		relativePath, err := filepath.Rel(root, path)
+		if err != nil {
+			relativePath = filepath.Base(path)
+		}
+		relativePath = filepath.ToSlash(relativePath)
+
+		workspace.Files = append(workspace.Files, models.WorkspaceFile{
+			Path:         filepath.Clean(path),
+			Name:         entry.Name(),
+			RelativePath: relativePath,
+			Depth:        strings.Count(relativePath, "/"),
+			Size:         info.Size(),
+			ModifiedAt:   info.ModTime().Format(time.RFC3339),
+		})
+		return nil
+	})
+	if err != nil {
+		return models.Workspace{}, err
+	}
+
+	sort.Slice(workspace.Files, func(i, j int) bool {
+		return strings.ToLower(workspace.Files[i].RelativePath) < strings.ToLower(workspace.Files[j].RelativePath)
+	})
+
+	return workspace, nil
 }
 
 func (s *Service) ReadDocument(path string) (models.DocumentPayload, error) {
@@ -134,10 +236,30 @@ func (s *Service) SaveDocumentAs(content string) (models.SaveResult, error) {
 	return s.SaveDocument(path, content)
 }
 
+func shouldSkipWorkspaceDir(name string) bool {
+	if name == "" {
+		return false
+	}
+	if strings.HasPrefix(name, ".") {
+		return true
+	}
+	_, skip := skippedWorkspaceDirs[strings.ToLower(name)]
+	return skip
+}
+
+func isWorkspaceMarkdownFile(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".md", ".markdown", ".mdown", ".mkd":
+		return true
+	default:
+		return false
+	}
+}
+
 func ensureMarkdownExtension(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
-	case ".md", ".markdown", ".mdown", ".txt":
+	case ".md", ".markdown", ".mdown", ".mkd", ".txt":
 		return path
 	default:
 		return path + ".md"

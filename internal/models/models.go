@@ -16,6 +16,23 @@ type DocumentPayload struct {
 	LastModified string `json:"lastModified"`
 }
 
+// WorkspaceFile describes one Markdown file inside an opened folder.
+type WorkspaceFile struct {
+	Path         string `json:"path"`
+	Name         string `json:"name"`
+	RelativePath string `json:"relativePath"`
+	Depth        int    `json:"depth"`
+	Size         int64  `json:"size"`
+	ModifiedAt   string `json:"modifiedAt"`
+}
+
+// Workspace contains the Markdown files discovered under a folder.
+type Workspace struct {
+	RootPath string          `json:"rootPath"`
+	Name     string          `json:"name"`
+	Files    []WorkspaceFile `json:"files"`
+}
+
 // SaveResult is returned after a successful save.
 type SaveResult struct {
 	Path    string `json:"path"`

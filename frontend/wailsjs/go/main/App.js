@@ -22,6 +22,10 @@ export function OpenDocument() {
   return window['go']['main']['App']['OpenDocument']();
 }
 
+export function OpenFolder() {
+  return window['go']['main']['App']['OpenFolder']();
+}
+
 export function ReadDocument(arg1) {
   return window['go']['main']['App']['ReadDocument'](arg1);
 }
