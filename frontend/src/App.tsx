@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import './App.css';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar, OutlinePanel } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
-import { MarkdownEditor } from './editor/MarkdownEditor';
+import { MarkdownEditor, SourceMarkdownEditor } from './editor/MarkdownEditor';
 import { markdownToExportHtml } from './editor/markdown';
 import {
   calculateStats,
@@ -17,7 +17,7 @@ import {
   normalizeConfig,
   resolveTheme,
 } from './state/documentStore';
-import type { AppConfig, DocumentPayload, DocumentState, OutlineItem, SaveResult, Workspace } from './types/app';
+import type { AppConfig, DocumentPayload, DocumentState, EditorMode, OutlineItem, SaveResult, Workspace } from './types/app';
 import {
   ExportHTML,
   LoadConfig,
@@ -36,6 +36,7 @@ function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
+  const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [message, setMessage] = useState('Ready');
 
   const stats = useMemo(() => calculateStats(documentState.markdown), [documentState.markdown]);
@@ -188,11 +189,26 @@ function App() {
     });
   }, []);
 
+  const handleSourceReady = useCallback((textarea: HTMLTextAreaElement | null) => {
+    sourceTextareaRef.current = textarea;
+  }, []);
+
   const handleJumpToHeading = useCallback((pos: number) => {
+    if (config.editorMode === 'source') {
+      const textarea = sourceTextareaRef.current;
+      if (!textarea) return;
+      const lineIndex = textarea.value.slice(0, pos).split(/\r\n|\r|\n/).length - 1;
+      const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 22;
+      textarea.focus();
+      textarea.setSelectionRange(pos, pos);
+      textarea.scrollTop = Math.max(0, lineIndex * lineHeight - textarea.clientHeight * 0.35);
+      return;
+    }
+
     if (!editor) return;
     editor.chain().focus().setTextSelection(pos + 1).run();
     editor.view.dom.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [editor]);
+  }, [config.editorMode, editor]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -217,6 +233,12 @@ function App() {
     void persistConfig({ ...config, showOutline: !config.showOutline });
   }, [config, persistConfig]);
 
+  const handleToggleEditorMode = useCallback(() => {
+    const editorMode: EditorMode = config.editorMode === 'source' ? 'rendered' : 'source';
+    void persistConfig({ ...config, editorMode });
+    setMessage(editorMode === 'source' ? 'Source mode' : 'Rendered mode');
+  }, [config, persistConfig]);
+
   const handleAutoSaveChange = useCallback((enabled: boolean) => {
     void persistConfig({ ...config, autoSave: enabled });
   }, [config, persistConfig]);
@@ -228,6 +250,7 @@ function App() {
         theme={config.theme}
         sidebarVisible={config.showSidebar}
         outlineVisible={config.showOutline}
+        editorMode={config.editorMode}
         autoSave={config.autoSave}
         isDirty={documentState.isDirty}
         onNew={handleNew}
@@ -238,6 +261,7 @@ function App() {
         onExport={handleExport}
         onToggleSidebar={handleToggleSidebar}
         onToggleOutline={handleToggleOutline}
+        onToggleEditorMode={handleToggleEditorMode}
         onToggleTheme={handleToggleTheme}
         onAutoSaveChange={handleAutoSaveChange}
       />
@@ -250,12 +274,22 @@ function App() {
           />
         )}
         <section className="document-area">
-          <MarkdownEditor
-            markdown={documentState.markdown}
-            onChange={handleMarkdownChange}
-            onOutlineChange={setOutline}
-            onEditorReady={setEditor}
-          />
+          {config.editorMode === 'source' ? (
+            <SourceMarkdownEditor
+              markdown={documentState.markdown}
+              onChange={handleMarkdownChange}
+              onOutlineChange={setOutline}
+              onEditorReady={setEditor}
+              onSourceReady={handleSourceReady}
+            />
+          ) : (
+            <MarkdownEditor
+              markdown={documentState.markdown}
+              onChange={handleMarkdownChange}
+              onOutlineChange={setOutline}
+              onEditorReady={setEditor}
+            />
+          )}
         </section>
         {config.showOutline && <OutlinePanel outline={outline} onJumpToHeading={handleJumpToHeading} />}
       </main>

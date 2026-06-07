@@ -54,6 +54,7 @@ type AppConfig struct {
 	AutoSaveDelay   int              `json:"autoSaveDelay"`
 	ShowSidebar     bool             `json:"showSidebar"`
 	ShowOutline     bool             `json:"showOutline"`
+	EditorMode      string           `json:"editorMode"`
 	RecentDocuments []RecentDocument `json:"recentDocuments"`
 }
 

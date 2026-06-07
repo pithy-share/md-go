@@ -235,6 +235,35 @@
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
 }
 
+.source-editor-shell {
+  display: flex;
+}
+
+.source-editor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.05);
+  color: var(--text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.65;
+  min-height: calc(100vh - 190px);
+  outline: none;
+  padding: 52px 64px;
+  resize: none;
+  tab-size: 2;
+  width: 100%;
+}
+
+.source-editor:focus {
+  border-color: var(--border-strong);
+}
+
+:root[data-theme="dark"] .source-editor {
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+}
+
 .prose-editor {
   font-size: 16px;
   line-height: 1.72;
@@ -466,7 +495,8 @@
     padding: 18px 16px 64px;
   }
 
-  .ProseMirror {
+  .ProseMirror,
+  .source-editor {
     padding: 32px 28px;
   }
 }

@@ -22,6 +22,7 @@ export namespace models {
 	    autoSaveDelay: number;
 	    showSidebar: boolean;
 	    showOutline: boolean;
+	    editorMode: string;
 	    recentDocuments: RecentDocument[];
 	
 	    static createFrom(source: any = {}) {
@@ -35,6 +36,7 @@ export namespace models {
 	        this.autoSaveDelay = source["autoSaveDelay"];
 	        this.showSidebar = source["showSidebar"];
 	        this.showOutline = source["showOutline"];
+	        this.editorMode = source["editorMode"];
 	        this.recentDocuments = this.convertValues(source["recentDocuments"], RecentDocument);
 	    }
 	

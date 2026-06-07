@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/react';
 import {
   Bold,
   Code,
+  Code2,
   Columns3,
   Download,
   FilePlus2,
@@ -30,13 +31,14 @@ import {
   Table2,
   Undo2,
 } from 'lucide-react';
-import type { ThemePreference } from '../types/app';
+import type { EditorMode, ThemePreference } from '../types/app';
 
 interface ToolbarProps {
   editor: Editor | null;
   theme: ThemePreference;
   sidebarVisible: boolean;
   outlineVisible: boolean;
+  editorMode: EditorMode;
   autoSave: boolean;
   isDirty: boolean;
   onNew: () => void;
@@ -47,6 +49,7 @@ interface ToolbarProps {
   onExport: () => void;
   onToggleSidebar: () => void;
   onToggleOutline: () => void;
+  onToggleEditorMode: () => void;
   onToggleTheme: () => void;
   onAutoSaveChange: (enabled: boolean) => void;
 }
@@ -56,6 +59,7 @@ export function Toolbar({
   theme,
   sidebarVisible,
   outlineVisible,
+  editorMode,
   autoSave,
   isDirty,
   onNew,
@@ -66,6 +70,7 @@ export function Toolbar({
   onExport,
   onToggleSidebar,
   onToggleOutline,
+  onToggleEditorMode,
   onToggleTheme,
   onAutoSaveChange,
 }: ToolbarProps) {
@@ -188,6 +193,9 @@ export function Toolbar({
         <input type="checkbox" checked={autoSave} onChange={(event) => onAutoSaveChange(event.currentTarget.checked)} />
         <span>Auto</span>
       </label>
+      <button className="icon-button" title={editorMode === 'source' ? 'Switch to rendered mode' : 'Switch to source mode'} onClick={onToggleEditorMode}>
+        {editorMode === 'source' ? <FileText size={18} /> : <Code2 size={18} />}
+      </button>
       <button className="icon-button" title="Toggle outline" onClick={onToggleOutline}>
         {outlineVisible ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
       </button>

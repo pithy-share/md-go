@@ -1,4 +1,4 @@
-import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, SaveResult, ThemePreference } from '../types/app';
+import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, EditorMode, SaveResult, ThemePreference } from '../types/app';
 
 export const defaultMarkdown = `# Untitled
 
@@ -11,13 +11,15 @@ export const defaultConfig: AppConfig = {
   autoSaveDelay: 1200,
   showSidebar: true,
   showOutline: true,
+  editorMode: 'rendered',
   recentDocuments: [],
 };
 
-export function normalizeConfig(input: (Omit<Partial<AppConfig>, 'theme'> & { theme?: string }) | null | undefined): AppConfig {
+export function normalizeConfig(input: (Omit<Partial<AppConfig>, 'theme' | 'editorMode'> & { theme?: string; editorMode?: string }) | null | undefined): AppConfig {
   const recentDocuments = Array.isArray(input?.recentDocuments) ? input.recentDocuments : defaultConfig.recentDocuments;
   const autoSaveDelay = input?.autoSaveDelay && input.autoSaveDelay > 0 ? input.autoSaveDelay : defaultConfig.autoSaveDelay;
   const showOutline = typeof input?.showOutline === 'boolean' ? input.showOutline : defaultConfig.showOutline;
+  const editorMode = normalizeEditorMode(input?.editorMode);
 
   return {
     ...defaultConfig,
@@ -25,6 +27,7 @@ export function normalizeConfig(input: (Omit<Partial<AppConfig>, 'theme'> & { th
     theme: normalizeTheme(input?.theme),
     autoSaveDelay,
     showOutline,
+    editorMode,
     recentDocuments,
   };
 }
@@ -32,6 +35,11 @@ export function normalizeConfig(input: (Omit<Partial<AppConfig>, 'theme'> & { th
 function normalizeTheme(theme: string | undefined): ThemePreference {
   if (theme === 'light' || theme === 'dark' || theme === 'system') return theme;
   return 'system';
+}
+
+function normalizeEditorMode(mode: string | undefined): EditorMode {
+  if (mode === 'source' || mode === 'rendered') return mode;
+  return 'rendered';
 }
 
 export function createEmptyDocument(): DocumentState {

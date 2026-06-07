@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -19,6 +19,10 @@ interface MarkdownEditorProps {
   onChange: (markdown: string) => void;
   onOutlineChange: (outline: OutlineItem[]) => void;
   onEditorReady: (editor: Editor | null) => void;
+}
+
+interface SourceMarkdownEditorProps extends MarkdownEditorProps {
+  onSourceReady: (textarea: HTMLTextAreaElement | null) => void;
 }
 
 export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorReady }: MarkdownEditorProps) {
@@ -89,6 +93,33 @@ export function MarkdownEditor({ markdown, onChange, onOutlineChange, onEditorRe
   );
 }
 
+export function SourceMarkdownEditor({ markdown, onChange, onOutlineChange, onEditorReady, onSourceReady }: SourceMarkdownEditorProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    onEditorReady(null);
+    onSourceReady(textareaRef.current);
+    return () => onSourceReady(null);
+  }, [onEditorReady, onSourceReady]);
+
+  useEffect(() => {
+    onOutlineChange(extractMarkdownOutline(markdown));
+  }, [markdown, onOutlineChange]);
+
+  return (
+    <div className="editor-shell source-editor-shell">
+      <textarea
+        ref={textareaRef}
+        className="source-editor"
+        spellCheck="true"
+        value={markdown}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        aria-label="Markdown source"
+      />
+    </div>
+  );
+}
+
 function extractOutline(editor: Editor): OutlineItem[] {
   const items: OutlineItem[] = [];
 
@@ -106,6 +137,70 @@ function extractOutline(editor: Editor): OutlineItem[] {
   });
 
   return items;
+}
+
+function extractMarkdownOutline(markdown: string): OutlineItem[] {
+  const items: OutlineItem[] = [];
+  const linePattern = /([^\r\n]*)(\r\n|\r|\n|$)/g;
+  let fence: { marker: string; length: number } | null = null;
+  let previousTextLine: { pos: number; text: string } | null = null;
+  let match: RegExpExecArray | null;
+
+  while ((match = linePattern.exec(markdown)) !== null) {
+    if (match[0] === '') break;
+
+    const line = match[1];
+    const pos = match.index;
+    const fenceMatch = /^\s*([`~]{3,})/.exec(line);
+
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0];
+      const length = fenceMatch[1].length;
+      if (!fence) {
+        fence = { marker, length };
+      } else if (marker === fence.marker && length >= fence.length) {
+        fence = null;
+      }
+      previousTextLine = null;
+      continue;
+    }
+
+    if (fence) {
+      previousTextLine = null;
+      continue;
+    }
+
+    const atxHeading = /^(#{1,6})(?:\s+|$)(.*?)\s*#*\s*$/.exec(line);
+    if (atxHeading) {
+      const level = atxHeading[1].length;
+      const text = atxHeading[2].trim();
+      if (text) items.push(createOutlineItem(pos, level, text));
+      previousTextLine = null;
+      continue;
+    }
+
+    const setextHeading = /^(=+|-+)\s*$/.exec(line);
+    if (setextHeading && previousTextLine) {
+      const level = setextHeading[1][0] === '=' ? 1 : 2;
+      items.push(createOutlineItem(previousTextLine.pos, level, previousTextLine.text));
+      previousTextLine = null;
+      continue;
+    }
+
+    const text = line.trim();
+    previousTextLine = text ? { pos, text } : null;
+  }
+
+  return items;
+}
+
+function createOutlineItem(pos: number, level: number, text: string): OutlineItem {
+  return {
+    id: `${pos}-${level}-${slugify(text)}`,
+    level,
+    pos,
+    text,
+  };
 }
 
 function normalizeHtml(html: string): string {

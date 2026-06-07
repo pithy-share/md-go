@@ -1,4 +1,5 @@
 export type ThemePreference = 'system' | 'light' | 'dark';
+export type EditorMode = 'rendered' | 'source';
 
 export interface DocumentMeta {
   title: string;
@@ -47,6 +48,7 @@ export interface AppConfig {
   autoSaveDelay: number;
   showSidebar: boolean;
   showOutline: boolean;
+  editorMode: EditorMode;
   recentDocuments: RecentDocument[];
 }
 

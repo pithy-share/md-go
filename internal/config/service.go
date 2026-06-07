@@ -35,6 +35,7 @@ func DefaultConfig() models.AppConfig {
 		AutoSaveDelay:   1200,
 		ShowSidebar:     true,
 		ShowOutline:     true,
+		EditorMode:      "rendered",
 		RecentDocuments: []models.RecentDocument{},
 	}
 }
@@ -117,6 +118,9 @@ func normalizeConfig(config models.AppConfig) models.AppConfig {
 	}
 	if config.AutoSaveDelay <= 0 {
 		config.AutoSaveDelay = 1200
+	}
+	if config.EditorMode != "source" && config.EditorMode != "rendered" {
+		config.EditorMode = "rendered"
 	}
 	if config.RecentDocuments == nil {
 		config.RecentDocuments = []models.RecentDocument{}
