@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"md-go/internal/models"
@@ -36,6 +37,7 @@ func DefaultConfig() models.AppConfig {
 		ShowSidebar:     true,
 		ShowOutline:     true,
 		EditorMode:      "rendered",
+		WorkspacePath:   "",
 		RecentDocuments: []models.RecentDocument{},
 	}
 }
@@ -84,7 +86,27 @@ func (s *Service) TouchRecentDocument(path string) error {
 }
 
 func (s *Service) TouchRecentFolder(path string) error {
-	return s.touchRecentPath(path, "folder")
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	if err := s.touchRecentPath(path, "folder"); err != nil {
+		return err
+	}
+	return s.SetWorkspacePath(path)
+}
+
+func (s *Service) SetWorkspacePath(path string) error {
+	config, err := s.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(path) == "" {
+		config.WorkspacePath = ""
+	} else {
+		config.WorkspacePath = filepath.Clean(path)
+	}
+	_, err = s.SaveConfig(config)
+	return err
 }
 
 func (s *Service) touchRecentPath(path string, itemType string) error {
@@ -135,6 +157,9 @@ func normalizeConfig(config models.AppConfig) models.AppConfig {
 	}
 	if config.EditorMode != "source" && config.EditorMode != "rendered" {
 		config.EditorMode = "rendered"
+	}
+	if strings.TrimSpace(config.WorkspacePath) != "" {
+		config.WorkspacePath = filepath.Clean(config.WorkspacePath)
 	}
 	if config.RecentDocuments == nil {
 		config.RecentDocuments = []models.RecentDocument{}

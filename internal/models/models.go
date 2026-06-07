@@ -56,6 +56,7 @@ type AppConfig struct {
 	ShowSidebar     bool             `json:"showSidebar"`
 	ShowOutline     bool             `json:"showOutline"`
 	EditorMode      string           `json:"editorMode"`
+	WorkspacePath   string           `json:"workspacePath"`
 	RecentDocuments []RecentDocument `json:"recentDocuments"`
 }
 

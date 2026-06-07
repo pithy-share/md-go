@@ -12,6 +12,7 @@ export const defaultConfig: AppConfig = {
   showSidebar: true,
   showOutline: true,
   editorMode: 'rendered',
+  workspacePath: '',
   recentDocuments: [],
 };
 
@@ -28,6 +29,7 @@ export function normalizeConfig(input: ConfigInput | null | undefined): AppConfi
   const autoSaveDelay = input?.autoSaveDelay && input.autoSaveDelay > 0 ? input.autoSaveDelay : defaultConfig.autoSaveDelay;
   const showOutline = typeof input?.showOutline === 'boolean' ? input.showOutline : defaultConfig.showOutline;
   const editorMode = normalizeEditorMode(input?.editorMode);
+  const workspacePath = typeof input?.workspacePath === 'string' ? input.workspacePath.trim() : defaultConfig.workspacePath;
 
   return {
     ...defaultConfig,
@@ -36,6 +38,7 @@ export function normalizeConfig(input: ConfigInput | null | undefined): AppConfi
     autoSaveDelay,
     showOutline,
     editorMode,
+    workspacePath,
     recentDocuments,
   };
 }

@@ -25,6 +25,7 @@ export namespace models {
 	    showSidebar: boolean;
 	    showOutline: boolean;
 	    editorMode: string;
+	    workspacePath: string;
 	    recentDocuments: RecentDocument[];
 	
 	    static createFrom(source: any = {}) {
@@ -39,6 +40,7 @@ export namespace models {
 	        this.showSidebar = source["showSidebar"];
 	        this.showOutline = source["showOutline"];
 	        this.editorMode = source["editorMode"];
+	        this.workspacePath = source["workspacePath"];
 	        this.recentDocuments = this.convertValues(source["recentDocuments"], RecentDocument);
 	    }
 	

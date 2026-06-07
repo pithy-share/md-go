@@ -17,7 +17,7 @@ import {
   normalizeConfig,
   resolveTheme,
 } from './state/documentStore';
-import type { AppConfig, DocumentPayload, DocumentState, EditorMode, OutlineItem, SaveResult, Workspace } from './types/app';
+import type { AppConfig, DocumentPayload, DocumentState, EditorMode, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
 import {
   ExportHTML,
   LoadConfig,
@@ -53,30 +53,56 @@ function App() {
         setConfig(merged);
 
         const latestRecent = merged.recentDocuments[0];
-        if (!latestRecent?.path || restoredRecentRef.current) return;
+        const startupWorkspacePath = resolveStartupWorkspacePath(merged);
+        if ((!latestRecent?.path && !startupWorkspacePath) || restoredRecentRef.current) return;
         restoredRecentRef.current = true;
 
-        try {
-          if (latestRecent.type === 'folder') {
-            const nextWorkspace = await ScanFolder(latestRecent.path);
-            if (!active || !nextWorkspace?.rootPath) return;
-            setWorkspace({ ...nextWorkspace, files: nextWorkspace.files ?? [] });
-            if (!merged.showSidebar) {
-              setConfig((current) => ({ ...current, showSidebar: true }));
+        let restoredWorkspace: Workspace | null = null;
+        let workspaceUnavailable = false;
+        if (startupWorkspacePath) {
+          try {
+            const nextWorkspace = await ScanFolder(startupWorkspacePath);
+            if (!active) return;
+            if (nextWorkspace?.rootPath) {
+              restoredWorkspace = { ...nextWorkspace, files: nextWorkspace.files ?? [] };
+              setWorkspace(restoredWorkspace);
+              if (!merged.showSidebar) {
+                setConfig((current) => ({ ...current, showSidebar: true }));
+              }
             }
-            setMessage(`Restored folder ${nextWorkspace.name || displayNameFromPath(nextWorkspace.rootPath)}`);
-            return;
+          } catch (error) {
+            console.error(error);
+            if (!active) return;
+            workspaceUnavailable = true;
+            setMessage('Recent folder is unavailable');
           }
+        }
 
+        if (!latestRecent?.path || latestRecent.type === 'folder') {
+          if (restoredWorkspace) {
+            setMessage(`Restored folder ${restoredWorkspace.name || displayNameFromPath(restoredWorkspace.rootPath)}`);
+          }
+          return;
+        }
+
+        try {
           const payload = await ReadDocument(latestRecent.path);
           if (!active) return;
           if (!payload?.path && !payload?.content) return;
           setDocumentState(documentFromPayload(payload));
-          setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}`);
+          if (restoredWorkspace) {
+            setMessage(
+              `Restored ${payload.name || displayNameFromPath(payload.path)} in ${restoredWorkspace.name || displayNameFromPath(restoredWorkspace.rootPath)}`,
+            );
+          } else if (workspaceUnavailable) {
+            setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}; recent folder is unavailable`);
+          } else {
+            setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}`);
+          }
         } catch (error) {
           console.error(error);
           if (!active) return;
-          setMessage(latestRecent.type === 'folder' ? 'Recent folder is unavailable' : 'Recent file is unavailable');
+          setMessage('Recent file is unavailable');
         }
       })
       .catch((error) => {
@@ -102,9 +128,11 @@ function App() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [documentState.isDirty]);
 
-  const persistConfig = useCallback(async (nextConfig: AppConfig) => {
-    setConfig(nextConfig);
+  const persistConfig = useCallback(async (updates: Partial<AppConfig>) => {
+    setConfig((current) => ({ ...current, ...updates }));
     try {
+      const latest = normalizeConfig(await LoadConfig());
+      const nextConfig = { ...latest, ...updates };
       const saved = normalizeConfig(await SaveConfig(models.AppConfig.createFrom(nextConfig)));
       setConfig(saved);
     } catch (error) {
@@ -147,8 +175,9 @@ function App() {
       const nextWorkspace = await OpenFolder();
       if (!nextWorkspace?.rootPath) return;
       setWorkspace({ ...nextWorkspace, files: nextWorkspace.files ?? [] });
+      setConfig((current) => ({ ...current, workspacePath: nextWorkspace.rootPath, showSidebar: true }));
       if (!config.showSidebar) {
-        void persistConfig({ ...config, showSidebar: true });
+        void persistConfig({ showSidebar: true });
       }
       setMessage(`Opened folder ${nextWorkspace.name || displayNameFromPath(nextWorkspace.rootPath)}`);
     } catch (error) {
@@ -251,26 +280,26 @@ function App() {
   }, [documentState.markdown, documentState.name]);
 
   const handleToggleTheme = useCallback(() => {
-    void persistConfig({ ...config, theme: nextTheme(config.theme) });
-  }, [config, persistConfig]);
+    void persistConfig({ theme: nextTheme(config.theme) });
+  }, [config.theme, persistConfig]);
 
   const handleToggleSidebar = useCallback(() => {
-    void persistConfig({ ...config, showSidebar: !config.showSidebar });
-  }, [config, persistConfig]);
+    void persistConfig({ showSidebar: !config.showSidebar });
+  }, [config.showSidebar, persistConfig]);
 
   const handleToggleOutline = useCallback(() => {
-    void persistConfig({ ...config, showOutline: !config.showOutline });
-  }, [config, persistConfig]);
+    void persistConfig({ showOutline: !config.showOutline });
+  }, [config.showOutline, persistConfig]);
 
   const handleToggleEditorMode = useCallback(() => {
     const editorMode: EditorMode = config.editorMode === 'source' ? 'rendered' : 'source';
-    void persistConfig({ ...config, editorMode });
+    void persistConfig({ editorMode });
     setMessage(editorMode === 'source' ? 'Source mode' : 'Rendered mode');
-  }, [config, persistConfig]);
+  }, [config.editorMode, persistConfig]);
 
   const handleAutoSaveChange = useCallback((enabled: boolean) => {
-    void persistConfig({ ...config, autoSave: enabled });
-  }, [config, persistConfig]);
+    void persistConfig({ autoSave: enabled });
+  }, [persistConfig]);
 
   return (
     <div className="app-frame">
@@ -328,6 +357,41 @@ function App() {
       <div className="toast" role="status" aria-live="polite">{message}</div>
     </div>
   );
+}
+
+function resolveStartupWorkspacePath(config: AppConfig) {
+  if (config.workspacePath) return config.workspacePath;
+
+  const latestRecent = config.recentDocuments[0];
+  if (!latestRecent?.path) return '';
+  if (latestRecent.type === 'folder') return latestRecent.path;
+  return findRecentFolderForFile(latestRecent, config.recentDocuments.slice(1))?.path ?? '';
+}
+
+function findRecentFolderForFile(fileRecent: RecentDocument, candidates: RecentDocument[]) {
+  if (fileRecent.type !== 'file') return null;
+  return candidates.find((item) => item.type === 'folder' && isPathInsideFolder(fileRecent.path, item.path)) ?? null;
+}
+
+function isPathInsideFolder(filePath: string, folderPath: string) {
+  const file = normalizePathForCompare(filePath);
+  const folder = normalizePathForCompare(folderPath);
+  if (!file || !folder) return false;
+  if (file === folder) return false;
+  return file.startsWith(folder.endsWith('/') ? folder : `${folder}/`);
+}
+
+function normalizePathForCompare(path: string) {
+  const normalized = trimTrailingSlashes(path.trim().replace(/\\/g, '/'));
+  if (/^[a-z]:\//i.test(normalized) || normalized.startsWith('//')) {
+    return normalized.toLowerCase();
+  }
+  return normalized;
+}
+
+function trimTrailingSlashes(path: string) {
+  if (path === '/' || /^[a-z]:\/$/i.test(path)) return path;
+  return path.replace(/\/+$/, '');
 }
 
 export default App;
