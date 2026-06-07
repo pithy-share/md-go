@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { mergeAttributes } from '@tiptap/core';
+import type { Mark, MarkType, Node as ProseMirrorNode } from '@tiptap/pm/model';
+import type { EditorState } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -12,6 +15,7 @@ import TableRow from '@tiptap/extension-table-row';
 import TaskItem from '@tiptap/extension-task-item';
 import TaskList from '@tiptap/extension-task-list';
 import Typography from '@tiptap/extension-typography';
+import { common, createLowlight } from 'lowlight';
 import { htmlToMarkdown, markdownToHtml } from './markdown';
 import type { OutlineItem } from '../types/app';
 
@@ -26,6 +30,19 @@ interface MarkdownEditorProps {
 interface SourceMarkdownEditorProps extends MarkdownEditorProps {
   onSourceReady: (textarea: HTMLTextAreaElement | null) => void;
 }
+
+const lowlight = createLowlight(common);
+
+lowlight.registerAlias({
+  bash: ['sh'],
+  cpp: ['cc', 'c++'],
+  csharp: ['cs'],
+  javascript: ['js'],
+  markdown: ['md'],
+  plaintext: ['text', 'plain'],
+  typescript: ['ts'],
+  xml: ['html'],
+});
 
 const MarkdownImage = Image.extend({
   addAttributes() {
@@ -53,8 +70,16 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        codeBlock: false,
         heading: { levels: [1, 2, 3, 4, 5, 6] },
         link: false,
+      }),
+      CodeBlockLowlight.configure({
+        defaultLanguage: 'c',
+        enableTabIndentation: true,
+        languageClassPrefix: 'language-',
+        lowlight,
+        tabSize: 2,
       }),
       Link.configure({
         autolink: true,
@@ -84,6 +109,12 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
       attributes: {
         class: 'prose-editor',
         spellcheck: 'true',
+      },
+      handleDOMEvents: {
+        copy(view, event) {
+          if (!(event instanceof ClipboardEvent)) return false;
+          return copyLinkSelection(event, view.state);
+        },
       },
     },
     onCreate({ editor }) {
@@ -234,6 +265,93 @@ function createOutlineItem(pos: number, level: number, text: string): OutlineIte
     pos,
     text,
   };
+}
+
+function copyLinkSelection(event: ClipboardEvent, state: EditorState): boolean {
+  const link = getCopyableLink(state);
+  if (!link || !event.clipboardData) return false;
+
+  event.preventDefault();
+  event.clipboardData.setData('text/plain', link.href);
+  event.clipboardData.setData('text/uri-list', link.href);
+  event.clipboardData.setData('text/html', `<a href="${escapeClipboardHtml(link.href)}">${escapeClipboardHtml(link.text || link.href)}</a>`);
+  return true;
+}
+
+function getCopyableLink(state: EditorState): { href: string; text: string } | null {
+  const linkMarkType = state.schema.marks.link;
+  if (!linkMarkType) return null;
+
+  const { selection } = state;
+  if (selection.empty) {
+    const mark = getActiveLinkMark(state, linkMarkType);
+    const href = getLinkHref(mark);
+    return href ? { href, text: href } : null;
+  }
+
+  return getSelectedLink(state, linkMarkType);
+}
+
+function getSelectedLink(state: EditorState, linkMarkType: MarkType): { href: string; text: string } | null {
+  const { from, to } = state.selection;
+  let href: string | null = null;
+  let hasLinkedText = false;
+  let hasUnlinkedText = false;
+  let hasMultipleLinks = false;
+
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!node.isText || !node.text) return;
+
+    const selectedText = getSelectedNodeText(node, pos, from, to);
+    if (!selectedText.trim()) return;
+
+    const nodeHref = getLinkHref(linkMarkType.isInSet(node.marks));
+    if (!nodeHref) {
+      hasUnlinkedText = true;
+      return;
+    }
+
+    hasLinkedText = true;
+    if (href && href !== nodeHref) {
+      hasMultipleLinks = true;
+      return;
+    }
+    href = nodeHref;
+  });
+
+  if (!href || !hasLinkedText || hasUnlinkedText || hasMultipleLinks) return null;
+  return { href, text: state.doc.textBetween(from, to, '\n').trim() };
+}
+
+function getSelectedNodeText(node: ProseMirrorNode, pos: number, from: number, to: number): string {
+  const start = Math.max(from, pos);
+  const end = Math.min(to, pos + node.nodeSize);
+  return node.text?.slice(start - pos, end - pos) ?? '';
+}
+
+function getActiveLinkMark(state: EditorState, linkMarkType: MarkType): Mark | null {
+  const storedMark = linkMarkType.isInSet(state.storedMarks ?? []);
+  if (storedMark) return storedMark;
+
+  const { $from } = state.selection;
+  const before = $from.parentOffset > 0 ? $from.parent.childBefore($from.parentOffset).node : null;
+  const after = $from.parentOffset < $from.parent.content.size ? $from.parent.childAfter($from.parentOffset).node : null;
+
+  return (after && linkMarkType.isInSet(after.marks)) || (before && linkMarkType.isInSet(before.marks)) || null;
+}
+
+function getLinkHref(mark: Mark | null | undefined): string {
+  const href = mark?.attrs.href;
+  return typeof href === 'string' ? href.trim() : '';
+}
+
+function escapeClipboardHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function normalizeHtml(html: string): string {
