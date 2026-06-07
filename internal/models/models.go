@@ -40,10 +40,11 @@ type SaveResult struct {
 	SavedAt string `json:"savedAt"`
 }
 
-// RecentDocument tracks files surfaced in the sidebar.
+// RecentDocument tracks files and folders opened by the user.
 type RecentDocument struct {
 	Path         string `json:"path"`
 	Name         string `json:"name"`
+	Type         string `json:"type"`
 	LastOpenedAt string `json:"lastOpenedAt"`
 }
 

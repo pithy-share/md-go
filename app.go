@@ -45,6 +45,10 @@ func (a *App) OpenFolder() (models.Workspace, error) {
 	return a.files.OpenFolder()
 }
 
+func (a *App) ScanFolder(path string) (models.Workspace, error) {
+	return a.files.ScanFolder(path)
+}
+
 func (a *App) ReadDocument(path string) (models.DocumentPayload, error) {
 	return a.files.ReadDocument(path)
 }

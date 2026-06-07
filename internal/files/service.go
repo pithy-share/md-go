@@ -160,6 +160,10 @@ func (s *Service) ScanFolder(path string) (models.Workspace, error) {
 		return strings.ToLower(workspace.Files[i].RelativePath) < strings.ToLower(workspace.Files[j].RelativePath)
 	})
 
+	if s.config != nil {
+		_ = s.config.TouchRecentFolder(root)
+	}
+
 	return workspace, nil
 }
 

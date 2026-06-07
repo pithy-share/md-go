@@ -42,6 +42,10 @@ export function SaveDocumentAs(arg1) {
   return window['go']['main']['App']['SaveDocumentAs'](arg1);
 }
 
+export function ScanFolder(arg1) {
+  return window['go']['main']['App']['ScanFolder'](arg1);
+}
+
 export function UpdateRecentDocument(arg1) {
   return window['go']['main']['App']['UpdateRecentDocument'](arg1);
 }

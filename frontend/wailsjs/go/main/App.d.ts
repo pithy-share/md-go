@@ -22,4 +22,6 @@ export function SaveDocument(arg1:string,arg2:string):Promise<models.SaveResult>
 
 export function SaveDocumentAs(arg1:string):Promise<models.SaveResult>;
 
+export function ScanFolder(arg1:string):Promise<models.Workspace>;
+
 export function UpdateRecentDocument(arg1:string):Promise<void>;

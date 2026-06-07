@@ -3,6 +3,7 @@ export namespace models {
 	export class RecentDocument {
 	    path: string;
 	    name: string;
+	    type: string;
 	    lastOpenedAt: string;
 	
 	    static createFrom(source: any = {}) {
@@ -13,6 +14,7 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.path = source["path"];
 	        this.name = source["name"];
+	        this.type = source["type"];
 	        this.lastOpenedAt = source["lastOpenedAt"];
 	    }
 	}

@@ -80,8 +80,19 @@ func (s *Service) GetRecentDocuments() ([]models.RecentDocument, error) {
 }
 
 func (s *Service) TouchRecentDocument(path string) error {
+	return s.touchRecentPath(path, "file")
+}
+
+func (s *Service) TouchRecentFolder(path string) error {
+	return s.touchRecentPath(path, "folder")
+}
+
+func (s *Service) touchRecentPath(path string, itemType string) error {
 	if path == "" {
 		return nil
+	}
+	if itemType != "folder" {
+		itemType = "file"
 	}
 
 	config, err := s.LoadConfig()
@@ -93,14 +104,17 @@ func (s *Service) TouchRecentDocument(path string) error {
 	entry := models.RecentDocument{
 		Path:         path,
 		Name:         filepath.Base(path),
+		Type:         itemType,
 		LastOpenedAt: time.Now().Format(time.RFC3339),
 	}
 
 	recent := []models.RecentDocument{entry}
 	for _, item := range config.RecentDocuments {
-		if filepath.Clean(item.Path) == path {
+		itemType := normalizeRecentType(item.Type)
+		if filepath.Clean(item.Path) == path && itemType == entry.Type {
 			continue
 		}
+		item.Type = itemType
 		recent = append(recent, item)
 		if len(recent) >= maxRecentDocuments {
 			break
@@ -125,8 +139,41 @@ func normalizeConfig(config models.AppConfig) models.AppConfig {
 	if config.RecentDocuments == nil {
 		config.RecentDocuments = []models.RecentDocument{}
 	}
-	if len(config.RecentDocuments) > maxRecentDocuments {
-		config.RecentDocuments = config.RecentDocuments[:maxRecentDocuments]
-	}
+	config.RecentDocuments = normalizeRecentDocuments(config.RecentDocuments)
 	return config
+}
+
+func normalizeRecentDocuments(items []models.RecentDocument) []models.RecentDocument {
+	recent := make([]models.RecentDocument, 0, len(items))
+	seen := map[string]struct{}{}
+
+	for _, item := range items {
+		if item.Path == "" {
+			continue
+		}
+		item.Path = filepath.Clean(item.Path)
+		item.Type = normalizeRecentType(item.Type)
+		if item.Name == "" {
+			item.Name = filepath.Base(item.Path)
+		}
+
+		key := item.Type + "\x00" + item.Path
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+
+		recent = append(recent, item)
+		if len(recent) >= maxRecentDocuments {
+			break
+		}
+	}
+	return recent
+}
+
+func normalizeRecentType(itemType string) string {
+	if itemType == "folder" {
+		return "folder"
+	}
+	return "file"
 }

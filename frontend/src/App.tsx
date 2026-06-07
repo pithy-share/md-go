@@ -27,6 +27,7 @@ import {
   SaveConfig,
   SaveDocument,
   SaveDocumentAs,
+  ScanFolder,
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
 
@@ -37,6 +38,7 @@ function App() {
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const restoredRecentRef = useRef(false);
   const [message, setMessage] = useState('Ready');
 
   const stats = useMemo(() => calculateStats(documentState.markdown), [documentState.markdown]);
@@ -45,10 +47,37 @@ function App() {
   useEffect(() => {
     let active = true;
     LoadConfig()
-      .then((loaded) => {
+      .then(async (loaded) => {
         if (!active) return;
         const merged = normalizeConfig(loaded);
         setConfig(merged);
+
+        const latestRecent = merged.recentDocuments[0];
+        if (!latestRecent?.path || restoredRecentRef.current) return;
+        restoredRecentRef.current = true;
+
+        try {
+          if (latestRecent.type === 'folder') {
+            const nextWorkspace = await ScanFolder(latestRecent.path);
+            if (!active || !nextWorkspace?.rootPath) return;
+            setWorkspace({ ...nextWorkspace, files: nextWorkspace.files ?? [] });
+            if (!merged.showSidebar) {
+              setConfig((current) => ({ ...current, showSidebar: true }));
+            }
+            setMessage(`Restored folder ${nextWorkspace.name || displayNameFromPath(nextWorkspace.rootPath)}`);
+            return;
+          }
+
+          const payload = await ReadDocument(latestRecent.path);
+          if (!active) return;
+          if (!payload?.path && !payload?.content) return;
+          setDocumentState(documentFromPayload(payload));
+          setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}`);
+        } catch (error) {
+          console.error(error);
+          if (!active) return;
+          setMessage(latestRecent.type === 'folder' ? 'Recent folder is unavailable' : 'Recent file is unavailable');
+        }
       })
       .catch((error) => {
         console.error(error);

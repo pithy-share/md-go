@@ -1,5 +1,6 @@
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type EditorMode = 'rendered' | 'source';
+export type RecentDocumentType = 'file' | 'folder';
 
 export interface DocumentMeta {
   title: string;
@@ -24,6 +25,7 @@ export interface SaveResult {
 export interface RecentDocument {
   path: string;
   name: string;
+  type: RecentDocumentType;
   lastOpenedAt: string;
 }
 
