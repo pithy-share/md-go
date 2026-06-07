@@ -1,4 +1,4 @@
-import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, RecentDocument, SaveResult, ThemePreference } from '../types/app';
+import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, SaveResult, ThemePreference } from '../types/app';
 
 export const defaultMarkdown = `# Untitled
 
@@ -10,18 +10,21 @@ export const defaultConfig: AppConfig = {
   autoSave: true,
   autoSaveDelay: 1200,
   showSidebar: true,
+  showOutline: true,
   recentDocuments: [],
 };
 
 export function normalizeConfig(input: (Omit<Partial<AppConfig>, 'theme'> & { theme?: string }) | null | undefined): AppConfig {
   const recentDocuments = Array.isArray(input?.recentDocuments) ? input.recentDocuments : defaultConfig.recentDocuments;
   const autoSaveDelay = input?.autoSaveDelay && input.autoSaveDelay > 0 ? input.autoSaveDelay : defaultConfig.autoSaveDelay;
+  const showOutline = typeof input?.showOutline === 'boolean' ? input.showOutline : defaultConfig.showOutline;
 
   return {
     ...defaultConfig,
     ...input,
     theme: normalizeTheme(input?.theme),
     autoSaveDelay,
+    showOutline,
     recentDocuments,
   };
 }

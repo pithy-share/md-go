@@ -19,6 +19,8 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
   Quote,
   Redo2,
   Save,
@@ -34,6 +36,7 @@ interface ToolbarProps {
   editor: Editor | null;
   theme: ThemePreference;
   sidebarVisible: boolean;
+  outlineVisible: boolean;
   autoSave: boolean;
   isDirty: boolean;
   onNew: () => void;
@@ -43,6 +46,7 @@ interface ToolbarProps {
   onSaveAs: () => void;
   onExport: () => void;
   onToggleSidebar: () => void;
+  onToggleOutline: () => void;
   onToggleTheme: () => void;
   onAutoSaveChange: (enabled: boolean) => void;
 }
@@ -51,6 +55,7 @@ export function Toolbar({
   editor,
   theme,
   sidebarVisible,
+  outlineVisible,
   autoSave,
   isDirty,
   onNew,
@@ -60,6 +65,7 @@ export function Toolbar({
   onSaveAs,
   onExport,
   onToggleSidebar,
+  onToggleOutline,
   onToggleTheme,
   onAutoSaveChange,
 }: ToolbarProps) {
@@ -182,6 +188,9 @@ export function Toolbar({
         <input type="checkbox" checked={autoSave} onChange={(event) => onAutoSaveChange(event.currentTarget.checked)} />
         <span>Auto</span>
       </label>
+      <button className="icon-button" title="Toggle outline" onClick={onToggleOutline}>
+        {outlineVisible ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}
+      </button>
       <button className="icon-button" title={`Theme: ${theme}`} onClick={onToggleTheme}>
         {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
       </button>

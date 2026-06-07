@@ -46,6 +46,7 @@ export interface AppConfig {
   autoSave: boolean;
   autoSaveDelay: number;
   showSidebar: boolean;
+  showOutline: boolean;
   recentDocuments: RecentDocument[];
 }
 

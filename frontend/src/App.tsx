@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import './App.css';
 import { Toolbar } from './components/Toolbar';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, OutlinePanel } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { MarkdownEditor } from './editor/MarkdownEditor';
 import { markdownToExportHtml } from './editor/markdown';
@@ -17,7 +17,7 @@ import {
   normalizeConfig,
   resolveTheme,
 } from './state/documentStore';
-import type { AppConfig, DocumentPayload, DocumentState, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
+import type { AppConfig, DocumentPayload, DocumentState, OutlineItem, SaveResult, Workspace } from './types/app';
 import {
   ExportHTML,
   LoadConfig,
@@ -27,7 +27,6 @@ import {
   SaveConfig,
   SaveDocument,
   SaveDocumentAs,
-  GetRecentDocuments,
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
 
@@ -35,24 +34,12 @@ function App() {
   const [documentState, setDocumentState] = useState<DocumentState>(() => createEmptyDocument());
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [recentDocuments, setRecentDocuments] = useState<RecentDocument[]>([]);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [message, setMessage] = useState('Ready');
 
   const stats = useMemo(() => calculateStats(documentState.markdown), [documentState.markdown]);
   const effectiveTheme = resolveTheme(config.theme);
-
-  const refreshRecentDocuments = useCallback(async () => {
-    try {
-      const recent = await GetRecentDocuments();
-      const normalizedRecent = recent ?? [];
-      setRecentDocuments(normalizedRecent);
-      setConfig((current) => ({ ...current, recentDocuments: normalizedRecent }));
-    } catch (error) {
-      console.error(error);
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -61,7 +48,6 @@ function App() {
         if (!active) return;
         const merged = normalizeConfig(loaded);
         setConfig(merged);
-        setRecentDocuments(merged.recentDocuments);
       })
       .catch((error) => {
         console.error(error);
@@ -91,7 +77,6 @@ function App() {
     try {
       const saved = normalizeConfig(await SaveConfig(models.AppConfig.createFrom(nextConfig)));
       setConfig(saved);
-      setRecentDocuments(saved.recentDocuments);
     } catch (error) {
       console.error(error);
       setMessage('Could not save settings');
@@ -107,8 +92,7 @@ function App() {
     if (!payload?.path && !payload?.content) return;
     setDocumentState(documentFromPayload(payload));
     setMessage(`Opened ${payload.name || displayNameFromPath(payload.path)}`);
-    void refreshRecentDocuments();
-  }, [refreshRecentDocuments]);
+  }, []);
 
   const handleNew = useCallback(() => {
     if (!confirmDiscard()) return;
@@ -154,24 +138,12 @@ function App() {
     }
   }, [confirmDiscard, loadDocument]);
 
-  const handleOpenRecent = useCallback(async (path: string) => {
-    if (!confirmDiscard()) return;
-    try {
-      const payload = await ReadDocument(path);
-      loadDocument(payload);
-    } catch (error) {
-      console.error(error);
-      setMessage('Recent file is unavailable');
-    }
-  }, [confirmDiscard, loadDocument]);
-
   const saveToPath = useCallback(async (path: string, markdown: string) => {
     const result = await SaveDocument(path, markdown);
     setDocumentState((current) => documentAfterSave(current, result));
     setMessage(`Saved ${result.name}`);
-    void refreshRecentDocuments();
     return result;
-  }, [refreshRecentDocuments]);
+  }, []);
 
   const handleSave = useCallback(async () => {
     try {
@@ -188,12 +160,11 @@ function App() {
       if (!result?.path) return;
       setDocumentState((current) => documentAfterSave(current, result));
       setMessage(`Saved ${result.name}`);
-      void refreshRecentDocuments();
     } catch (error) {
       console.error(error);
       setMessage('Save as failed');
     }
-  }, [documentState.markdown, refreshRecentDocuments]);
+  }, [documentState.markdown]);
 
   useEffect(() => {
     if (!config.autoSave || !documentState.isDirty || !documentState.path) return;
@@ -242,6 +213,10 @@ function App() {
     void persistConfig({ ...config, showSidebar: !config.showSidebar });
   }, [config, persistConfig]);
 
+  const handleToggleOutline = useCallback(() => {
+    void persistConfig({ ...config, showOutline: !config.showOutline });
+  }, [config, persistConfig]);
+
   const handleAutoSaveChange = useCallback((enabled: boolean) => {
     void persistConfig({ ...config, autoSave: enabled });
   }, [config, persistConfig]);
@@ -252,6 +227,7 @@ function App() {
         editor={editor}
         theme={config.theme}
         sidebarVisible={config.showSidebar}
+        outlineVisible={config.showOutline}
         autoSave={config.autoSave}
         isDirty={documentState.isDirty}
         onNew={handleNew}
@@ -261,6 +237,7 @@ function App() {
         onSaveAs={handleSaveAs}
         onExport={handleExport}
         onToggleSidebar={handleToggleSidebar}
+        onToggleOutline={handleToggleOutline}
         onToggleTheme={handleToggleTheme}
         onAutoSaveChange={handleAutoSaveChange}
       />
@@ -269,11 +246,7 @@ function App() {
           <Sidebar
             currentPath={documentState.path}
             workspace={workspace}
-            recentDocuments={recentDocuments}
-            outline={outline}
             onOpenWorkspaceFile={handleOpenWorkspaceFile}
-            onOpenRecent={handleOpenRecent}
-            onJumpToHeading={handleJumpToHeading}
           />
         )}
         <section className="document-area">
@@ -284,6 +257,7 @@ function App() {
             onEditorReady={setEditor}
           />
         </section>
+        {config.showOutline && <OutlinePanel outline={outline} onJumpToHeading={handleJumpToHeading} />}
       </main>
       <StatusBar path={documentState.path} isDirty={documentState.isDirty} lastSavedAt={documentState.lastSavedAt} stats={stats} />
       <div className="toast" role="status" aria-live="polite">{message}</div>

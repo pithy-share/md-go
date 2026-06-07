@@ -34,6 +34,7 @@ func DefaultConfig() models.AppConfig {
 		AutoSave:        true,
 		AutoSaveDelay:   1200,
 		ShowSidebar:     true,
+		ShowOutline:     true,
 		RecentDocuments: []models.RecentDocument{},
 	}
 }
