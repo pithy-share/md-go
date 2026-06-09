@@ -1,7 +1,7 @@
 .app-frame {
   display: grid;
   grid-template-rows: 42px minmax(0, 1fr) 28px;
-  height: 100vh;
+  height: var(--app-height, 100vh);
   background: var(--bg);
   color: var(--text);
 }
@@ -296,7 +296,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.05);
-  min-height: calc(100vh - 190px);
+  min-height: calc(var(--app-height, 100vh) - 190px);
   outline: none;
   padding: 52px 64px;
 }
@@ -318,7 +318,7 @@
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 14px;
   line-height: 1.65;
-  min-height: calc(100vh - 190px);
+  min-height: calc(var(--app-height, 100vh) - 190px);
   outline: none;
   padding: 52px 64px;
   resize: none;

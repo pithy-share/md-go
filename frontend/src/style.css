@@ -37,6 +37,10 @@
   box-sizing: border-box;
 }
 
+html {
+  background: #f5f6f8;
+}
+
 html,
 body,
 #root {

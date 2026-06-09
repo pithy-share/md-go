@@ -30,6 +30,7 @@ import {
   ScanFolder,
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
+import { WindowSetBackgroundColour } from '../wailsjs/runtime/runtime';
 
 function App() {
   const [documentState, setDocumentState] = useState<DocumentState>(() => createEmptyDocument());
@@ -116,7 +117,30 @@ function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = effectiveTheme;
+    const bg = effectiveTheme === 'dark'
+      ? { r: 25, g: 28, b: 32 }
+      : { r: 245, g: 246, b: 248 };
+    try { WindowSetBackgroundColour(bg.r, bg.g, bg.b, 1); } catch { /* Wails runtime may be unavailable in browser dev */ }
   }, [effectiveTheme]);
+
+  // Pin viewport height to a JS-computed CSS variable so layout
+  // never lags behind native window resize — avoids the delayed
+  // "shake" that WebView2's async 100vh recalculation can cause.
+  useEffect(() => {
+    let frameId = 0;
+    const setHeight = () => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+      });
+    };
+    setHeight();
+    window.addEventListener('resize', setHeight);
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('resize', setHeight);
+    };
+  }, []);
 
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
