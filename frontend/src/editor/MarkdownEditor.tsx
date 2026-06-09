@@ -137,6 +137,49 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
 
   useEffect(() => {
     if (!editor) return;
+    const element = editor.view.dom;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod) return;
+
+      // Ctrl+1/2/3 → toggle heading (already heading at this level → paragraph)
+      if (event.key === '1' || event.key === '2' || event.key === '3') {
+        if (event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        const level = parseInt(event.key, 10) as 1 | 2 | 3;
+        editor.chain().focus().toggleHeading({ level }).run();
+        return;
+      }
+
+      // Ctrl+Shift+` → toggle inline code
+      if (event.shiftKey && event.code === 'Backquote') {
+        event.preventDefault();
+        editor.chain().focus().toggleCode().run();
+        return;
+      }
+
+      // Ctrl+K → insert/edit link
+      if (event.key === 'k' && !event.shiftKey) {
+        event.preventDefault();
+        const previousUrl = editor.getAttributes('link').href as string | undefined;
+        const url = window.prompt('Link URL', previousUrl ?? 'https://');
+        if (url === null) return;
+        if (url.trim() === '') {
+          editor.chain().focus().extendMarkRange('link').unsetLink().run();
+          return;
+        }
+        editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+        return;
+      }
+    };
+
+    element.addEventListener('keydown', handleKeyDown);
+    return () => element.removeEventListener('keydown', handleKeyDown);
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor) return;
     if (lastInternalMarkdownRef.current === markdown && lastDocumentPathRef.current === documentPath) return;
     const incomingHtml = markdownToHtml(markdown, documentPath);
     if (normalizeHtml(editor.getHTML()) === normalizeHtml(incomingHtml)) {

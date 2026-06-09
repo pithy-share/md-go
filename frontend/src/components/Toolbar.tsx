@@ -147,19 +147,19 @@ export function Toolbar({
         <button className="icon-button" title="Toggle sidebar" onClick={onToggleSidebar}>
           {sidebarVisible ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
         </button>
-        <button className="icon-button" title="New document" onClick={onNew}>
+        <button className="icon-button" title="New document (Ctrl+N)" onClick={onNew}>
           <FilePlus2 size={18} />
         </button>
-        <button className="icon-button" title="Open document" onClick={onOpen}>
+        <button className="icon-button" title="Open document (Ctrl+O)" onClick={onOpen}>
           <FileText size={18} />
         </button>
         <button className="icon-button" title="Open folder" onClick={onOpenFolder}>
           <FolderOpen size={18} />
         </button>
-        <button className={`icon-button ${isDirty ? 'attention' : ''}`} title="Save" onClick={onSave}>
+        <button className={`icon-button ${isDirty ? 'attention' : ''}`} title="Save (Ctrl+S)" onClick={onSave}>
           <Save size={18} />
         </button>
-        <button className="icon-button" title="Save as" onClick={onSaveAs}>
+        <button className="icon-button" title="Save as (Ctrl+Shift+S)" onClick={onSaveAs}>
           <SaveAll size={18} />
         </button>
         <button className="icon-button" title="Export HTML" onClick={onExport}>
@@ -170,19 +170,19 @@ export function Toolbar({
       <div className="toolbar-divider" />
 
       <div className="toolbar-group">
-        <button className={markClass(editor, 'bold')} title="Bold" disabled={disabled} onClick={() => editor?.chain().focus().toggleBold().run()}>
+        <button className={markClass(editor, 'bold')} title="Bold (Ctrl+B)" disabled={disabled} onClick={() => editor?.chain().focus().toggleBold().run()}>
           <Bold size={17} />
         </button>
-        <button className={markClass(editor, 'italic')} title="Italic" disabled={disabled} onClick={() => editor?.chain().focus().toggleItalic().run()}>
+        <button className={markClass(editor, 'italic')} title="Italic (Ctrl+I)" disabled={disabled} onClick={() => editor?.chain().focus().toggleItalic().run()}>
           <Italic size={17} />
         </button>
         <button className={markClass(editor, 'strike')} title="Strikethrough" disabled={disabled} onClick={() => editor?.chain().focus().toggleStrike().run()}>
           <Strikethrough size={17} />
         </button>
-        <button className={markClass(editor, 'code')} title="Inline code" disabled={disabled} onClick={() => editor?.chain().focus().toggleCode().run()}>
+        <button className={markClass(editor, 'code')} title="Inline code (Ctrl+Shift+`)" disabled={disabled} onClick={() => editor?.chain().focus().toggleCode().run()}>
           <Code size={17} />
         </button>
-        <button className={markClass(editor, 'link')} title="Link" disabled={disabled} onClick={setLink}>
+        <button className={markClass(editor, 'link')} title="Link (Ctrl+K)" disabled={disabled} onClick={setLink}>
           <LinkIcon size={17} />
         </button>
         <button className="icon-button" title="Copy link URL" disabled={!currentLinkHref} onClick={copyLink}>
@@ -193,13 +193,13 @@ export function Toolbar({
       <div className="toolbar-divider" />
 
       <div className="toolbar-group">
-        <button className={headingClass(editor, 1)} title="Heading 1" disabled={disabled} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}>
+        <button className={headingClass(editor, 1)} title="Heading 1 (Ctrl+1)" disabled={disabled} onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}>
           <Heading1 size={17} />
         </button>
-        <button className={headingClass(editor, 2)} title="Heading 2" disabled={disabled} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
+        <button className={headingClass(editor, 2)} title="Heading 2 (Ctrl+2)" disabled={disabled} onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
           <Heading2 size={17} />
         </button>
-        <button className={headingClass(editor, 3)} title="Heading 3" disabled={disabled} onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}>
+        <button className={headingClass(editor, 3)} title="Heading 3 (Ctrl+3)" disabled={disabled} onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()}>
           <Heading3 size={17} />
         </button>
         <button className={nodeClass(editor, 'bulletList')} title="Bullet list" disabled={disabled} onClick={() => editor?.chain().focus().toggleBulletList().run()}>
@@ -281,10 +281,10 @@ export function Toolbar({
         <button className="icon-button" title="Insert image" disabled={disabled} onClick={addImage}>
           <ImageIcon size={17} />
         </button>
-        <button className="icon-button" title="Undo" disabled={disabled} onClick={() => editor?.chain().focus().undo().run()}>
+        <button className="icon-button" title="Undo (Ctrl+Z)" disabled={disabled} onClick={() => editor?.chain().focus().undo().run()}>
           <Undo2 size={17} />
         </button>
-        <button className="icon-button" title="Redo" disabled={disabled} onClick={() => editor?.chain().focus().redo().run()}>
+        <button className="icon-button" title="Redo (Ctrl+Shift+Z)" disabled={disabled} onClick={() => editor?.chain().focus().redo().run()}>
           <Redo2 size={17} />
         </button>
       </div>

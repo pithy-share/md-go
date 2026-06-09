@@ -226,6 +226,41 @@ function App() {
   }, [documentState.markdown]);
 
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod) return;
+
+      // Ctrl+S → save (Shift+S → save as)
+      if (event.key === 's') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          handleSaveAs();
+        } else {
+          handleSave();
+        }
+        return;
+      }
+
+      // Ctrl+N → new document
+      if (event.key === 'n' && !event.shiftKey) {
+        event.preventDefault();
+        handleNew();
+        return;
+      }
+
+      // Ctrl+O → open document
+      if (event.key === 'o' && !event.shiftKey) {
+        event.preventDefault();
+        handleOpen();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSave, handleSaveAs, handleNew, handleOpen]);
+
+  useEffect(() => {
     if (!config.autoSave || !documentState.isDirty || !documentState.path) return;
     const timeout = window.setTimeout(() => {
       void saveToPath(documentState.path, documentState.markdown).catch((error) => {
