@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { mergeAttributes } from '@tiptap/core';
 import type { Mark, MarkType, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorState } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Image from '@tiptap/extension-image';
@@ -17,6 +18,9 @@ import TaskList from '@tiptap/extension-task-list';
 import Typography from '@tiptap/extension-typography';
 import { common, createLowlight } from 'lowlight';
 import { htmlToMarkdown, markdownToHtml } from './markdown';
+import { languageLabel } from './languages';
+import { InlineCodeLanguage } from './InlineCodeLanguage';
+import { InlineLinkEditor } from './InlineLinkEditor';
 import type { OutlineItem } from '../types/app';
 
 interface MarkdownEditorProps {
@@ -31,6 +35,23 @@ interface SourceMarkdownEditorProps extends MarkdownEditorProps {
   onSourceReady: (textarea: HTMLTextAreaElement | null) => void;
 }
 
+type InlineEditState =
+  | {
+      type: 'code-language';
+      pos: number;
+      language: string;
+      target: HTMLElement;
+    }
+  | {
+      type: 'link';
+      from: number;
+      to: number;
+      text: string;
+      href: string;
+      target: HTMLElement;
+    }
+  | null;
+
 const lowlight = createLowlight(common);
 
 lowlight.registerAlias({
@@ -42,6 +63,46 @@ lowlight.registerAlias({
   plaintext: ['text', 'plain'],
   typescript: ['ts'],
   xml: ['html'],
+});
+
+const CodeBlockWithLanguage = CodeBlockLowlight.extend({
+  addNodeView() {
+    return ({ node, getPos }) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'code-block-wrapper';
+      (wrapper as unknown as Record<string, unknown>).__getPos = getPos;
+
+      const pre = document.createElement('pre');
+      wrapper.appendChild(pre);
+
+      const code = document.createElement('code');
+      const lang = (node.attrs.language as string) || 'c';
+      code.classList.add(`language-${lang}`);
+      pre.appendChild(code);
+
+      const tag = document.createElement('div');
+      tag.className = 'code-lang-tag';
+      tag.contentEditable = 'false';
+      tag.textContent = languageLabel(lang);
+      wrapper.appendChild(tag);
+
+      return {
+        dom: wrapper,
+        contentDOM: code,
+        update(updatedNode) {
+          if (updatedNode.type.name !== 'codeBlock') return false;
+          const newLang = (updatedNode.attrs.language as string) || 'c';
+          tag.textContent = languageLabel(newLang);
+          code.className = code.className
+            .replace(/language-\w+/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+          code.classList.add(`language-${newLang}`);
+          return true;
+        },
+      };
+    };
+  },
 });
 
 const MarkdownImage = Image.extend({
@@ -64,9 +125,82 @@ const MarkdownImage = Image.extend({
   },
 });
 
+function handleInlineClick(
+  view: EditorView,
+  event: MouseEvent,
+  setState: (state: InlineEditState) => void,
+): boolean {
+  const target = event.target as HTMLElement;
+
+  // Code block language tag click
+  const langTag = target.closest('.code-lang-tag');
+  if (langTag instanceof HTMLElement) {
+    const wrapper = langTag.closest('.code-block-wrapper') as HTMLElement | null;
+    if (!wrapper) return false;
+    const getPos = (wrapper as unknown as Record<string, unknown>).__getPos as (() => number) | undefined;
+    if (typeof getPos !== 'function') return false;
+    try {
+      const pos = getPos();
+      const node = view.state.doc.nodeAt(pos);
+      if (!node || node.type.name !== 'codeBlock') return false;
+      const language = (node.attrs.language as string) || 'c';
+      setState({ type: 'code-language', pos, language, target: langTag });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Link click
+  const linkEl = target.closest('a');
+  if (linkEl instanceof HTMLAnchorElement) {
+    if (event.ctrlKey || event.metaKey) {
+      window.open(linkEl.href, '_blank');
+      return true;
+    }
+    try {
+      const pos = view.posAtDOM(linkEl, 0);
+      const $pos = view.state.doc.resolve(pos);
+      const linkMark = $pos.marks().find((m) => m.type.name === 'link');
+      if (!linkMark) return false;
+      const href = (linkMark.attrs.href as string) || '';
+      const linkType = view.state.schema.marks.link;
+
+      // Expand to find link range
+      let from = pos;
+      let to = pos;
+      for (let i = pos - 1; i >= 0; i--) {
+        const r = view.state.doc.resolve(i);
+        if (!r.marks().some((m) => m.type === linkType && m.attrs.href === href)) {
+          from = i + 1;
+          break;
+        }
+        if (i === 0) from = 0;
+      }
+      for (let i = pos + 1; i <= view.state.doc.content.size; i++) {
+        const r = view.state.doc.resolve(i);
+        if (!r.marks().some((m) => m.type === linkType && m.attrs.href === href)) {
+          to = i;
+          break;
+        }
+        if (i === view.state.doc.content.size) to = i;
+      }
+
+      const text = view.state.doc.textBetween(from, to);
+      setState({ type: 'link', from, to, text, href, target: linkEl });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChange, onEditorReady }: MarkdownEditorProps) {
   const lastInternalMarkdownRef = useRef(markdown);
   const lastDocumentPathRef = useRef(documentPath);
+  const [inlineEdit, setInlineEdit] = useState<InlineEditState>(null);
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -74,7 +208,7 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
         heading: { levels: [1, 2, 3, 4, 5, 6] },
         link: false,
       }),
-      CodeBlockLowlight.configure({
+      CodeBlockWithLanguage.configure({
         defaultLanguage: 'c',
         enableTabIndentation: true,
         languageClassPrefix: 'language-',
@@ -111,6 +245,10 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
         spellcheck: 'true',
       },
       handleDOMEvents: {
+        click(view, event) {
+          if (!(event instanceof MouseEvent)) return false;
+          return handleInlineClick(view, event, setInlineEdit);
+        },
         copy(view, event) {
           if (!(event instanceof ClipboardEvent)) return false;
           return copyLinkSelection(event, view.state);
@@ -196,6 +334,45 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
   return (
     <div className="editor-shell">
       <EditorContent editor={editor} />
+      {inlineEdit?.type === 'code-language' && (
+        <InlineCodeLanguage
+          target={inlineEdit.target}
+          currentLanguage={inlineEdit.language}
+          onSelect={(newLang) => {
+            editor?.chain().focus().setNodeSelection(inlineEdit.pos).updateAttributes('codeBlock', { language: newLang }).run();
+            setInlineEdit(null);
+          }}
+          onClose={() => setInlineEdit(null)}
+        />
+      )}
+      {inlineEdit?.type === 'link' && (
+        <InlineLinkEditor
+          target={inlineEdit.target}
+          text={inlineEdit.text}
+          href={inlineEdit.href}
+          onApply={(newText, newHref) => {
+            const chain = editor?.chain().focus();
+            if (newText !== inlineEdit.text) {
+              // Text changed: replace content and re-apply link
+              chain?.setTextSelection({ from: inlineEdit.from, to: inlineEdit.to }).deleteSelection().insertContent(newText).run();
+              const newTo = inlineEdit.from + newText.length;
+              editor?.chain().focus().setTextSelection({ from: inlineEdit.from, to: newTo }).setLink({ href: newHref }).run();
+            } else {
+              // Only href changed
+              chain?.setTextSelection({ from: inlineEdit.from, to: inlineEdit.to }).extendMarkRange('link').setLink({ href: newHref }).run();
+            }
+            setInlineEdit(null);
+          }}
+          onUnlink={() => {
+            editor?.chain().focus().setTextSelection({ from: inlineEdit.from, to: inlineEdit.to }).unsetLink().run();
+            setInlineEdit(null);
+          }}
+          onOpen={() => {
+            window.open(inlineEdit.href, '_blank');
+          }}
+          onClose={() => setInlineEdit(null)}
+        />
+      )}
     </div>
   );
 }

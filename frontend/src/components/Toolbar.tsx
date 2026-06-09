@@ -38,6 +38,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import type { EditorMode, ThemePreference } from '../types/app';
+import { ALL_LANGUAGES } from '../editor/languages';
 
 interface ToolbarProps {
   editor: Editor | null;
@@ -221,7 +222,7 @@ export function Toolbar({
           </button>
           {openMenu === 'code' && (
             <div className="toolbar-menu-panel code-menu" role="menu">
-              {CODE_LANGUAGES.map((language) => (
+              {ALL_LANGUAGES.map((language) => (
                 <button
                   key={language.value}
                   className={`toolbar-menu-item ${editor?.isActive('codeBlock', { language: language.value }) ? 'active' : ''}`}
@@ -308,21 +309,6 @@ export function Toolbar({
   );
 }
 
-const CODE_LANGUAGES = [
-  { label: 'C', value: 'c' },
-  { label: 'C++', value: 'cpp' },
-  { label: 'Go', value: 'go' },
-  { label: 'JavaScript', value: 'javascript' },
-  { label: 'TypeScript', value: 'typescript' },
-  { label: 'Python', value: 'python' },
-  { label: 'Java', value: 'java' },
-  { label: 'HTML', value: 'html' },
-  { label: 'CSS', value: 'css' },
-  { label: 'JSON', value: 'json' },
-  { label: 'Bash', value: 'bash' },
-  { label: 'SQL', value: 'sql' },
-  { label: 'Markdown', value: 'markdown' },
-] as const;
 
 function markClass(editor: Editor | null, mark: string, extraClass = '') {
   return buttonClass(editor?.isActive(mark), extraClass);
