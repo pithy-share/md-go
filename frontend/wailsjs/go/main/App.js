@@ -14,6 +14,10 @@ export function LoadConfig() {
   return window['go']['main']['App']['LoadConfig']();
 }
 
+export function LoadHotkeys() {
+  return window['go']['main']['App']['LoadHotkeys']();
+}
+
 export function NewDocument() {
   return window['go']['main']['App']['NewDocument']();
 }
@@ -30,6 +34,10 @@ export function ReadDocument(arg1) {
   return window['go']['main']['App']['ReadDocument'](arg1);
 }
 
+export function ResetHotkeys() {
+  return window['go']['main']['App']['ResetHotkeys']();
+}
+
 export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
 }
@@ -40,6 +48,10 @@ export function SaveDocument(arg1, arg2) {
 
 export function SaveDocumentAs(arg1) {
   return window['go']['main']['App']['SaveDocumentAs'](arg1);
+}
+
+export function SaveHotkeys(arg1) {
+  return window['go']['main']['App']['SaveHotkeys'](arg1);
 }
 
 export function ScanFolder(arg1) {

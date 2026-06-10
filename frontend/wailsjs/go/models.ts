@@ -1,5 +1,35 @@
 export namespace models {
 	
+	export class HotkeyBinding {
+	    id: string;
+	    action: string;
+	    label: string;
+	    key: string;
+	    ctrl: boolean;
+	    alt: boolean;
+	    shift: boolean;
+	    meta: boolean;
+	    enabled: boolean;
+	    category: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HotkeyBinding(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.action = source["action"];
+	        this.label = source["label"];
+	        this.key = source["key"];
+	        this.ctrl = source["ctrl"];
+	        this.alt = source["alt"];
+	        this.shift = source["shift"];
+	        this.meta = source["meta"];
+	        this.enabled = source["enabled"];
+	        this.category = source["category"];
+	    }
+	}
 	export class RecentDocument {
 	    path: string;
 	    name: string;
@@ -27,6 +57,7 @@ export namespace models {
 	    editorMode: string;
 	    workspacePath: string;
 	    recentDocuments: RecentDocument[];
+	    hotkeys: HotkeyBinding[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -42,6 +73,7 @@ export namespace models {
 	        this.editorMode = source["editorMode"];
 	        this.workspacePath = source["workspacePath"];
 	        this.recentDocuments = this.convertValues(source["recentDocuments"], RecentDocument);
+	        this.hotkeys = this.convertValues(source["hotkeys"], HotkeyBinding);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -112,6 +144,7 @@ export namespace models {
 	        this.html = source["html"];
 	    }
 	}
+	
 	
 	export class SaveResult {
 	    path: string;

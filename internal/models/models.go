@@ -58,10 +58,42 @@ type AppConfig struct {
 	EditorMode      string           `json:"editorMode"`
 	WorkspacePath   string           `json:"workspacePath"`
 	RecentDocuments []RecentDocument `json:"recentDocuments"`
+	Hotkeys         []HotkeyBinding  `json:"hotkeys"`
 }
 
 // ExportPayload carries HTML content generated from the active Markdown document.
 type ExportPayload struct {
 	Title string `json:"title"`
 	HTML  string `json:"html"`
+}
+
+// HotkeyBinding defines a single keyboard shortcut mapped to an action.
+type HotkeyBinding struct {
+	ID        string `json:"id"`
+	Action    string `json:"action"`
+	Label     string `json:"label"`
+	Key       string `json:"key"`
+	Ctrl      bool   `json:"ctrl"`
+	Alt       bool   `json:"alt"`
+	Shift     bool   `json:"shift"`
+	Meta      bool   `json:"meta"`
+	Enabled   bool   `json:"enabled"`
+	Category  string `json:"category"`
+}
+
+// DefaultHotkeys returns the factory-default hotkey bindings.
+func DefaultHotkeys() []HotkeyBinding {
+	return []HotkeyBinding{
+		{ID: "save", Action: "save", Label: "Save", Key: "s", Ctrl: true, Enabled: true, Category: "file"},
+		{ID: "open", Action: "open", Label: "Open File", Key: "o", Ctrl: true, Enabled: true, Category: "file"},
+		{ID: "new", Action: "new", Label: "New Document", Key: "n", Ctrl: true, Enabled: true, Category: "file"},
+		{ID: "export", Action: "export", Label: "Export HTML", Key: "e", Ctrl: true, Shift: true, Enabled: true, Category: "file"},
+		{ID: "save-as", Action: "save-as", Label: "Save As", Key: "s", Ctrl: true, Shift: true, Enabled: true, Category: "file"},
+		{ID: "bold", Action: "bold", Label: "Bold", Key: "b", Ctrl: true, Enabled: true, Category: "format"},
+		{ID: "italic", Action: "italic", Label: "Italic", Key: "i", Ctrl: true, Enabled: true, Category: "format"},
+		{ID: "toggle-sidebar", Action: "toggle-sidebar", Label: "Toggle Sidebar", Key: "b", Ctrl: true, Shift: true, Enabled: true, Category: "view"},
+		{ID: "toggle-outline", Action: "toggle-outline", Label: "Toggle Outline", Key: "o", Ctrl: true, Shift: true, Enabled: true, Category: "view"},
+		{ID: "toggle-editor-mode", Action: "toggle-editor-mode", Label: "Toggle Editor Mode", Key: "m", Ctrl: true, Shift: true, Enabled: true, Category: "view"},
+		{ID: "find", Action: "find", Label: "Search", Key: "f", Ctrl: true, Enabled: true, Category: "edit"},
+	}
 }

@@ -81,6 +81,11 @@ func (s *Service) GetRecentDocuments() ([]models.RecentDocument, error) {
 	return config.RecentDocuments, nil
 }
 
+// GetConfigPath returns the directory where config files are stored.
+func (s *Service) GetConfigPath() string {
+	return filepath.Dir(s.path)
+}
+
 func (s *Service) TouchRecentDocument(path string) error {
 	return s.touchRecentPath(path, "file")
 }
@@ -165,6 +170,9 @@ func normalizeConfig(config models.AppConfig) models.AppConfig {
 		config.RecentDocuments = []models.RecentDocument{}
 	}
 	config.RecentDocuments = normalizeRecentDocuments(config.RecentDocuments)
+	if config.Hotkeys == nil || len(config.Hotkeys) == 0 {
+		config.Hotkeys = models.DefaultHotkeys()
+	}
 	return config
 }
 

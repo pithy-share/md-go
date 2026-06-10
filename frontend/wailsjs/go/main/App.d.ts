@@ -8,6 +8,8 @@ export function GetRecentDocuments():Promise<Array<models.RecentDocument>>;
 
 export function LoadConfig():Promise<models.AppConfig>;
 
+export function LoadHotkeys():Promise<Array<models.HotkeyBinding>>;
+
 export function NewDocument():Promise<models.DocumentMeta>;
 
 export function OpenDocument():Promise<models.DocumentPayload>;
@@ -16,11 +18,15 @@ export function OpenFolder():Promise<models.Workspace>;
 
 export function ReadDocument(arg1:string):Promise<models.DocumentPayload>;
 
+export function ResetHotkeys():Promise<Array<models.HotkeyBinding>>;
+
 export function SaveConfig(arg1:models.AppConfig):Promise<models.AppConfig>;
 
 export function SaveDocument(arg1:string,arg2:string):Promise<models.SaveResult>;
 
 export function SaveDocumentAs(arg1:string):Promise<models.SaveResult>;
+
+export function SaveHotkeys(arg1:Array<models.HotkeyBinding>):Promise<Array<models.HotkeyBinding>>;
 
 export function ScanFolder(arg1:string):Promise<models.Workspace>;
 
