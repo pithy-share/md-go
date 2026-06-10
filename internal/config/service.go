@@ -210,3 +210,16 @@ func normalizeRecentType(itemType string) string {
 	}
 	return "file"
 }
+
+// AppendDebugLog appends a timestamped message to debug.log in the config directory.
+func (s *Service) AppendDebugLog(msg string) {
+	logPath := filepath.Join(filepath.Dir(s.path), "debug.log")
+	_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
+	line := time.Now().Format("2006-01-02 15:04:05") + " " + msg + "\n"
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(line)
+}

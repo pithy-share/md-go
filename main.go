@@ -31,6 +31,9 @@ func main() {
 			Middleware: localImageMiddleware,
 		},
 		BackgroundColour: &options.RGBA{R: 245, G: 246, B: 248, A: 1},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop: true,
+		},
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,

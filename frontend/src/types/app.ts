@@ -81,3 +81,16 @@ export interface DocumentStats {
   words: number;
   lines: number;
 }
+
+export interface HotkeyBinding {
+  id: string;
+  action: string;
+  label: string;
+  key: string;
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  meta: boolean;
+  enabled: boolean;
+  category: string;
+}

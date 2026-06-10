@@ -17,10 +17,11 @@ import {
   normalizeConfig,
   resolveTheme,
 } from './state/documentStore';
-import type { AppConfig, DocumentPayload, DocumentState, EditorMode, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
+import type { AppConfig, DocumentPayload, DocumentState, EditorMode, HotkeyBinding, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
 import {
   ExportHTML,
   LoadConfig,
+  LoadHotkeys,
   OpenDocument,
   OpenFolder,
   ReadDocument,
@@ -30,7 +31,8 @@ import {
   ScanFolder,
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
-import { WindowSetBackgroundColour } from '../wailsjs/runtime/runtime';
+import { LogPrint, OnFileDrop, OnFileDropOff, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime';
+import { HotkeySettings } from './components/HotkeySettings';
 
 function App() {
   const [documentState, setDocumentState] = useState<DocumentState>(() => createEmptyDocument());
@@ -39,8 +41,14 @@ function App() {
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<Editor | null>(null);
   const restoredRecentRef = useRef(false);
   const [message, setMessage] = useState('Ready');
+
+  // ── Hotkey state ──
+  const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>([]);
+  const [hotkeySettingsOpen, setHotkeySettingsOpen] = useState(false);
+  const actionHandlersRef = useRef<Record<string, () => void>>({});
 
   const stats = useMemo(() => calculateStats(documentState.markdown), [documentState.markdown]);
   const effectiveTheme = resolveTheme(config.theme);
@@ -249,40 +257,120 @@ function App() {
     }
   }, [documentState.markdown]);
 
+  // ── Load hotkeys from backend ──
+  useEffect(() => {
+    LoadHotkeys()
+      .then((bindings) => {
+        if (bindings) setHotkeys(bindings);
+      })
+      .catch(console.error);
+  }, []);
+
+  // ── Drag & drop: open .md files dropped onto the window ──
+  useEffect(() => {
+    LogPrint('DROP: OnFileDrop registered');
+
+    OnFileDrop((_x, _y, paths) => {
+      LogPrint(`DROP: OnFileDrop paths=[${paths?.join(', ')}]`);
+      if (!paths?.length) return;
+      const mdPath = paths.find((p: string) => /\.(md|markdown|mdown|mkd)$/i.test(p));
+      if (!mdPath) {
+        LogPrint('DROP: no .md file in drop');
+        return;
+      }
+      if (!confirmDiscard()) {
+        LogPrint('DROP: discarded due to unsaved changes');
+        return;
+      }
+      LogPrint(`DROP: opening ${mdPath}`);
+      ReadDocument(mdPath)
+        .then((payload) => {
+          LogPrint(`DROP: ReadDocument OK name=${payload?.name}`);
+          loadDocument(payload);
+        })
+        .catch((error) => {
+          LogPrint(`DROP: ReadDocument ERROR=${String(error)}`);
+        });
+    }, false);
+
+    return () => {
+      LogPrint('DROP: OnFileDrop cleanup');
+      OnFileDropOff();
+    };
+  }, []);
+
+  const handleLinkAction = useCallback(() => {
+    const ed = editorRef.current;
+    if (!ed) return;
+    const previousUrl = ed.getAttributes('link').href as string | undefined;
+    const url = window.prompt('Link URL', previousUrl ?? 'https://');
+    if (url === null) return;
+    if (url.trim() === '') {
+      ed.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
+    ed.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+  }, []);
+
+  const handleFindAction = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('md-go:open-search'));
+  }, []);
+
+  // ── Keep action dispatcher ref in sync ──
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  useEffect(() => {
+    actionHandlersRef.current = {
+      save: handleSave,
+      'save-as': handleSaveAs,
+      new: handleNew,
+      open: handleOpen,
+      export: handleExport,
+      'toggle-sidebar': handleToggleSidebar,
+      'toggle-outline': handleToggleOutline,
+      'toggle-editor-mode': handleToggleEditorMode,
+      bold: () => editorRef.current?.chain().focus().toggleBold().run(),
+      italic: () => editorRef.current?.chain().focus().toggleItalic().run(),
+      heading1: () => editorRef.current?.chain().focus().toggleHeading({ level: 1 }).run(),
+      heading2: () => editorRef.current?.chain().focus().toggleHeading({ level: 2 }).run(),
+      heading3: () => editorRef.current?.chain().focus().toggleHeading({ level: 3 }).run(),
+      'inline-code': () => editorRef.current?.chain().focus().toggleCode().run(),
+      link: () => handleLinkAction(),
+      find: () => handleFindAction(),
+    };
+  });
+
+  // ── Global keydown: match against dynamic hotkey bindings ──
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const mod = event.ctrlKey || event.metaKey;
-      if (!mod) return;
+      // Skip if the editor already handled this event (its element-level handler fires first in bubble)
+      if (event.defaultPrevented) return;
 
-      // Ctrl+S → save (Shift+S → save as)
-      if (event.key === 's') {
-        event.preventDefault();
-        if (event.shiftKey) {
-          handleSaveAs();
-        } else {
-          handleSave();
+      for (const binding of hotkeys) {
+        if (!binding.enabled) continue;
+
+        const mod = event.ctrlKey || event.metaKey;
+        if (binding.ctrl !== mod) continue;
+        if (binding.shift !== event.shiftKey) continue;
+        if (binding.alt !== event.altKey) continue;
+        if (binding.meta !== event.metaKey) continue;
+        if (binding.key.toLowerCase() !== event.key.toLowerCase()) continue;
+
+        const handler = actionHandlersRef.current[binding.action];
+        if (handler) {
+          event.preventDefault();
+          handler();
+          return;
         }
-        return;
-      }
-
-      // Ctrl+N → new document
-      if (event.key === 'n' && !event.shiftKey) {
-        event.preventDefault();
-        handleNew();
-        return;
-      }
-
-      // Ctrl+O → open document
-      if (event.key === 'o' && !event.shiftKey) {
-        event.preventDefault();
-        handleOpen();
-        return;
+        // No handler registered — let the browser/editor handle it naturally
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave, handleSaveAs, handleNew, handleOpen]);
+  }, [hotkeys]);
 
   useEffect(() => {
     if (!config.autoSave || !documentState.isDirty || !documentState.path) return;
@@ -360,8 +448,16 @@ function App() {
     void persistConfig({ autoSave: enabled });
   }, [persistConfig]);
 
+  const handleToggleHotkeySettings = useCallback(() => {
+    setHotkeySettingsOpen((prev) => !prev);
+  }, []);
+
+  const handleHotkeysSaved = useCallback((bindings: HotkeyBinding[]) => {
+    setHotkeys(bindings);
+  }, []);
+
   return (
-    <div className="app-frame">
+    <div className="app-frame" style={{ '--wails-drop-target': '1' } as React.CSSProperties}>
       <Toolbar
         editor={editor}
         theme={config.theme}
@@ -381,6 +477,7 @@ function App() {
         onToggleEditorMode={handleToggleEditorMode}
         onToggleTheme={handleToggleTheme}
         onAutoSaveChange={handleAutoSaveChange}
+        onToggleHotkeySettings={handleToggleHotkeySettings}
       />
       <main className="workspace">
         {config.showSidebar && (
@@ -413,6 +510,7 @@ function App() {
         {config.showOutline && <OutlinePanel outline={outline} onJumpToHeading={handleJumpToHeading} />}
       </main>
       <StatusBar path={documentState.path} isDirty={documentState.isDirty} lastSavedAt={documentState.lastSavedAt} stats={stats} />
+      <HotkeySettings isOpen={hotkeySettingsOpen} onClose={handleToggleHotkeySettings} onSaved={handleHotkeysSaved} />
       <div className="toast" role="status" aria-live="polite">{message}</div>
     </div>
   );

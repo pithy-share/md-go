@@ -343,6 +343,16 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
     return () => element.removeEventListener('keydown', handleKeyDown);
   }, [editor]);
 
+  // ── Search: listen for global find trigger ──
+  useEffect(() => {
+    const handler = () => setSearchOpen((prev) => {
+      if (!prev) setShowReplace(false);
+      return !prev;
+    });
+    window.addEventListener('md-go:open-search', handler);
+    return () => window.removeEventListener('md-go:open-search', handler);
+  }, []);
+
   // ── Search: register ProseMirror plugin ──
   useEffect(() => {
     if (!editor) return;

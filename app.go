@@ -100,3 +100,8 @@ func (a *App) SaveHotkeys(bindings []models.HotkeyBinding) ([]models.HotkeyBindi
 func (a *App) ResetHotkeys() ([]models.HotkeyBinding, error) {
 	return a.hotkeys.ResetToDefaults()
 }
+
+// DebugLog appends a line to the debug log file.
+func (a *App) DebugLog(msg string) {
+	a.config.AppendDebugLog(msg)
+}

@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   Italic,
   Link as LinkIcon,
+  Keyboard,
   List,
   ListChecks,
   ListOrdered,
@@ -59,6 +60,7 @@ interface ToolbarProps {
   onToggleEditorMode: () => void;
   onToggleTheme: () => void;
   onAutoSaveChange: (enabled: boolean) => void;
+  onToggleHotkeySettings: () => void;
 }
 
 export function Toolbar({
@@ -80,6 +82,7 @@ export function Toolbar({
   onToggleEditorMode,
   onToggleTheme,
   onAutoSaveChange,
+  onToggleHotkeySettings,
 }: ToolbarProps) {
   const [openMenu, setOpenMenu] = useState<'code' | 'table' | null>(null);
   const toolbarRef = useRef<HTMLElement | null>(null);
@@ -304,6 +307,9 @@ export function Toolbar({
       </button>
       <button className="icon-button" title={`Theme: ${theme}`} onClick={onToggleTheme}>
         {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+      </button>
+      <button className="icon-button" title="Keyboard shortcuts" onClick={onToggleHotkeySettings}>
+        <Keyboard size={18} />
       </button>
     </header>
   );
