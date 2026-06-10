@@ -31,10 +31,18 @@ interface WorkspaceFileNode {
 export function Sidebar({ currentPath, workspace, onOpenWorkspaceFile }: SidebarProps) {
   const tree = useMemo(() => buildWorkspaceTree(workspace?.files ?? []), [workspace?.files]);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     setCollapsedFolders(new Set());
   }, [workspace?.rootPath]);
+
+  // ── Search: when query is active, reset collapsed state and filter tree ──
+  const isSearching = searchQuery.trim().length > 0;
+  const displayTree = useMemo(() => {
+    if (!isSearching) return tree;
+    return filterTree(tree, searchQuery);
+  }, [tree, searchQuery, isSearching]);
 
   const toggleFolder = (id: string) => {
     setCollapsedFolders((current) => {
@@ -55,17 +63,27 @@ export function Sidebar({ currentPath, workspace, onOpenWorkspaceFile }: Sidebar
           <Folder size={15} />
           <span>{workspace?.name || 'Workspace'}</span>
         </div>
+        <div className="sidebar-search">
+          <input
+            type="text"
+            className="sidebar-search-input"
+            placeholder="Search files..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.currentTarget.value)}
+            spellCheck={false}
+          />
+        </div>
         <div className="sidebar-list tree-list">
           {!workspace ? (
             <div className="empty-state">No folder open</div>
-          ) : tree.length === 0 ? (
-            <div className="empty-state">No Markdown files</div>
+          ) : displayTree.length === 0 ? (
+            <div className="empty-state">{isSearching ? 'No matching files' : 'No Markdown files'}</div>
           ) : (
             <WorkspaceTree
               currentPath={currentPath}
-              items={tree}
+              items={displayTree}
               level={0}
-              collapsedFolders={collapsedFolders}
+              collapsedFolders={isSearching ? new Set() : collapsedFolders}
               onToggleFolder={toggleFolder}
               onOpenWorkspaceFile={onOpenWorkspaceFile}
             />
@@ -205,4 +223,35 @@ function sortTree(items: WorkspaceTreeItem[]) {
   for (const item of items) {
     if (item.type === 'folder') sortTree(item.children);
   }
+}
+
+/**
+ * Filter the file tree by filename/folder name (case-insensitive).
+ * When a folder name matches, it is expanded with all its direct children.
+ * When only children match, the folder is collapsed to show only matching children.
+ */
+function filterTree(items: WorkspaceTreeItem[], query: string): WorkspaceTreeItem[] {
+  const lowerQuery = query.toLowerCase();
+  const result: WorkspaceTreeItem[] = [];
+
+  for (const item of items) {
+    if (item.type === 'folder') {
+      const folderMatch = item.name.toLowerCase().includes(lowerQuery);
+      const filteredChildren = filterTree(item.children, query);
+
+      if (folderMatch) {
+        // Folder name matched — include all children (unfiltered), force-expanded
+        result.push({ ...item, children: item.children });
+      } else if (filteredChildren.length > 0) {
+        // Only some children matched — include only them
+        result.push({ ...item, children: filteredChildren });
+      }
+    } else {
+      if (item.file.name.toLowerCase().includes(lowerQuery)) {
+        result.push(item);
+      }
+    }
+  }
+
+  return result;
 }

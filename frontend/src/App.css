@@ -831,3 +831,231 @@
 .inline-link-editor-btn.danger:hover {
   color: #e06c75;
 }
+
+/* ================================
+   Search bar
+   ================================ */
+
+.search-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  margin-bottom: 12px;
+  padding: 8px 10px;
+}
+
+.search-bar-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.search-bar-row + .search-bar-row {
+  margin-top: 6px;
+}
+
+.search-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.search-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+  height: 28px;
+  outline: none;
+  padding: 0 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  border-color: var(--accent);
+}
+
+.search-replace-input {
+  font-family: inherit;
+}
+
+.search-match-count {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.search-no-matches {
+  color: var(--danger);
+}
+
+.search-nav-buttons {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.search-nav-btn,
+.search-toggle-replace,
+.search-close-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 28px;
+}
+
+.search-nav-btn:hover:not(:disabled),
+.search-toggle-replace:hover,
+.search-close-btn:hover {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.search-nav-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.search-toggle-replace.active {
+  color: var(--accent);
+  background: var(--surface-muted);
+  border-color: var(--border);
+}
+
+/* ================================
+   Sidebar filename search
+   ================================ */
+
+.sidebar-search {
+  padding: 0;
+}
+
+.sidebar-search-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 13px;
+  height: 30px;
+  outline: none;
+  padding: 0 9px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sidebar-search-input:focus {
+  border-color: var(--accent);
+}
+
+.sidebar-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ================================
+   Search highlights
+   ================================ */
+
+.search-match {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 2px;
+}
+
+.search-match-active {
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/* ================================
+   Source editor wrapper & highlights overlay
+   ================================ */
+
+.source-editor-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: calc(var(--app-height, 100vh) - 190px);
+}
+
+.source-editor-highlights,
+.source-editor {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.65;
+  padding: 52px 64px;
+  tab-size: 2;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  min-height: calc(var(--app-height, 100vh) - 190px);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.source-editor-highlights {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  color: transparent;
+  pointer-events: none;
+  overflow: hidden;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.source-editor-highlights mark {
+  border-radius: 2px;
+}
+
+.source-editor {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: var(--text);
+  resize: none;
+  width: 100%;
+  display: block;
+}
+
+.source-editor:focus {
+  border-color: var(--border-strong);
+}
+
+/* ── Make the original source-editor shell use flex column so SearchBar sits above ── */
+
+.source-editor-shell {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Override original source-editor styles that conflict with wrapper ── */
+
+.source-editor-shell > .source-editor {
+  /* Old direct child selector no longer applies; handled via wrapper */
+}
+
+@media (max-width: 920px) {
+  .source-editor-highlights,
+  .source-editor {
+    padding: 32px 28px;
+  }
+}

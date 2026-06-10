@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { mergeAttributes } from '@tiptap/core';
 import type { Mark, MarkType, Node as ProseMirrorNode } from '@tiptap/pm/model';
@@ -21,6 +21,8 @@ import { htmlToMarkdown, markdownToHtml } from './markdown';
 import { languageLabel } from './languages';
 import { InlineCodeLanguage } from './InlineCodeLanguage';
 import { InlineLinkEditor } from './InlineLinkEditor';
+import { SearchBar } from './SearchBar';
+import { createSearchPlugin, findMatches, findMatchesInDoc, searchPluginKey, type SearchResult } from './searchPlugin';
 import type { OutlineItem } from '../types/app';
 
 interface MarkdownEditorProps {
@@ -201,6 +203,15 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
   const lastInternalMarkdownRef = useRef(markdown);
   const lastDocumentPathRef = useRef(documentPath);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState>(null);
+
+  // ── Search state ──
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [replaceText, setReplaceText] = useState('');
+  const [showReplace, setShowReplace] = useState(false);
+  const [searchMatches, setSearchMatches] = useState<SearchResult[]>([]);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -310,10 +321,115 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
         editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
         return;
       }
+
+      // Ctrl+F → open search
+      if (event.key === 'f' && !event.shiftKey) {
+        event.preventDefault();
+        setSearchOpen((prev) => !prev);
+        setShowReplace(false);
+        return;
+      }
+
+      // Ctrl+H → open search with replace
+      if (event.key === 'h' && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        setSearchOpen(true);
+        setShowReplace(true);
+        return;
+      }
     };
 
     element.addEventListener('keydown', handleKeyDown);
     return () => element.removeEventListener('keydown', handleKeyDown);
+  }, [editor]);
+
+  // ── Search: register ProseMirror plugin ──
+  useEffect(() => {
+    if (!editor) return;
+    editor.registerPlugin(createSearchPlugin());
+    return () => {
+      try { editor.unregisterPlugin(searchPluginKey); } catch { /* ok */ }
+    };
+  }, [editor]);
+
+  // ── Search: recalculate matches when query changes ──
+  useEffect(() => {
+    if (!editor) return;
+
+    if (!searchQuery) {
+      setSearchMatches([]);
+      setCurrentMatchIndex(0);
+      editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: [], activeIndex: 0 }));
+      return;
+    }
+
+    const matches = findMatchesInDoc(editor.state.doc, searchQuery);
+    setSearchMatches(matches);
+    setCurrentMatchIndex((prev) => Math.min(prev, Math.max(0, matches.length - 1)));
+    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches, activeIndex: 0 }));
+  }, [editor, searchQuery]);
+
+  // ── Search: navigation & replace callbacks ──
+  const goToNextMatch = useCallback(() => {
+    if (searchMatches.length === 0 || !editor) return;
+    const nextIndex = (currentMatchIndex + 1) % searchMatches.length;
+    setCurrentMatchIndex(nextIndex);
+    const match = searchMatches[nextIndex];
+    editor.chain().focus().setTextSelection({ from: match.from, to: match.to }).run();
+    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: searchMatches, activeIndex: nextIndex }));
+  }, [editor, searchMatches, currentMatchIndex]);
+
+  const goToPrevMatch = useCallback(() => {
+    if (searchMatches.length === 0 || !editor) return;
+    const prevIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIndex(prevIndex);
+    const match = searchMatches[prevIndex];
+    editor.chain().focus().setTextSelection({ from: match.from, to: match.to }).run();
+    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: searchMatches, activeIndex: prevIndex }));
+  }, [editor, searchMatches, currentMatchIndex]);
+
+  const handleReplace = useCallback(() => {
+    if (searchMatches.length === 0 || !editor) return;
+    const match = searchMatches[currentMatchIndex];
+    if (!match) return;
+
+    editor
+      .chain()
+      .focus()
+      .setTextSelection({ from: match.from, to: match.to })
+      .deleteSelection()
+      .insertContent(replaceText)
+      .run();
+
+    // Recalculate matches
+    const newMatches = findMatchesInDoc(editor.state.doc, searchQuery);
+    setSearchMatches(newMatches);
+    setCurrentMatchIndex(Math.min(currentMatchIndex, newMatches.length - 1));
+    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: newMatches, activeIndex: 0 }));
+  }, [editor, searchMatches, currentMatchIndex, replaceText, searchQuery]);
+
+  const handleReplaceAll = useCallback(() => {
+    if (searchMatches.length === 0 || !editor) return;
+
+    let tr = editor.state.tr;
+    const sorted = [...searchMatches].sort((a, b) => b.from - a.from);
+    for (const match of sorted) {
+      tr = tr.replaceWith(match.from, match.to, editor.state.schema.text(replaceText));
+    }
+    editor.view.dispatch(tr);
+
+    setSearchMatches([]);
+    setCurrentMatchIndex(0);
+  }, [editor, searchMatches, replaceText]);
+
+  const handleCloseSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchMatches([]);
+    setReplaceText('');
+    setCurrentMatchIndex(0);
+    editor?.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: [], activeIndex: 0 }));
+    editor?.chain().focus().run();
   }, [editor]);
 
   useEffect(() => {
@@ -333,6 +449,23 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
 
   return (
     <div className="editor-shell">
+      {searchOpen && (
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          replaceText={replaceText}
+          onReplaceTextChange={setReplaceText}
+          matchIndex={currentMatchIndex}
+          totalMatches={searchMatches.length}
+          showReplace={showReplace}
+          onPrev={goToPrevMatch}
+          onNext={goToNextMatch}
+          onReplace={handleReplace}
+          onReplaceAll={handleReplaceAll}
+          onClose={handleCloseSearch}
+          onToggleReplace={() => setShowReplace((prev) => !prev)}
+        />
+      )}
       <EditorContent editor={editor} />
       {inlineEdit?.type === 'code-language' && (
         <InlineCodeLanguage
@@ -379,6 +512,15 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
 
 export function SourceMarkdownEditor({ markdown, onChange, onOutlineChange, onEditorReady, onSourceReady }: SourceMarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const highlightsRef = useRef<HTMLPreElement | null>(null);
+
+  // ── Search state ──
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [replaceText, setReplaceText] = useState('');
+  const [showReplace, setShowReplace] = useState(false);
+  const [searchMatches, setSearchMatches] = useState<SearchResult[]>([]);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
   useEffect(() => {
     onEditorReady(null);
@@ -390,18 +532,168 @@ export function SourceMarkdownEditor({ markdown, onChange, onOutlineChange, onEd
     onOutlineChange(extractMarkdownOutline(markdown));
   }, [markdown, onOutlineChange]);
 
+  // ── Ctrl+F / Ctrl+H ──
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey;
+      if (!mod) return;
+
+      if (event.key === 'f' && !event.shiftKey) {
+        event.preventDefault();
+        setSearchOpen((prev) => !prev);
+        setShowReplace(false);
+        return;
+      }
+
+      if (event.key === 'h' && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        setSearchOpen(true);
+        setShowReplace(true);
+        return;
+      }
+    };
+
+    textarea.addEventListener('keydown', handleKeyDown);
+    return () => textarea.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // ── Recalculate matches when query or markdown changes ──
+  useEffect(() => {
+    if (!searchQuery) {
+      setSearchMatches([]);
+      setCurrentMatchIndex(0);
+      return;
+    }
+    const matches = findMatches(markdown, searchQuery);
+    setSearchMatches(matches);
+    setCurrentMatchIndex((prev) => Math.min(prev, Math.max(0, matches.length - 1)));
+  }, [searchQuery, markdown]);
+
+  // ── Sync highlight scroll with textarea ──
+  const handleScroll = useCallback(() => {
+    if (highlightsRef.current && textareaRef.current) {
+      highlightsRef.current.scrollTop = textareaRef.current.scrollTop;
+      highlightsRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  }, []);
+
+  // ── Navigate current match ──
+  const goToNextMatch = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    const nextIndex = (currentMatchIndex + 1) % searchMatches.length;
+    setCurrentMatchIndex(nextIndex);
+    const match = searchMatches[nextIndex];
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.focus();
+      textarea.setSelectionRange(match.from, match.to);
+    }
+  }, [searchMatches, currentMatchIndex]);
+
+  const goToPrevMatch = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    const prevIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    setCurrentMatchIndex(prevIndex);
+    const match = searchMatches[prevIndex];
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.focus();
+      textarea.setSelectionRange(match.from, match.to);
+    }
+  }, [searchMatches, currentMatchIndex]);
+
+  // ── Replace ──
+  const handleReplace = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    const match = searchMatches[currentMatchIndex];
+    if (!match) return;
+    const next = markdown.slice(0, match.from) + replaceText + markdown.slice(match.to);
+    onChange(next);
+  }, [searchMatches, currentMatchIndex, markdown, replaceText, onChange]);
+
+  const handleReplaceAll = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    let result = markdown;
+    const sorted = [...searchMatches].sort((a, b) => b.from - a.from);
+    for (const match of sorted) {
+      result = result.slice(0, match.from) + replaceText + result.slice(match.to);
+    }
+    onChange(result);
+  }, [searchMatches, markdown, replaceText, onChange]);
+
+  const handleCloseSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchMatches([]);
+    setReplaceText('');
+    setCurrentMatchIndex(0);
+    textareaRef.current?.focus();
+  }, []);
+
+  // Build highlighted HTML for the backdrop
+  const highlightedMarkdown = useMemo(() => {
+    if (!searchQuery || searchMatches.length === 0) return escapeHtml(markdown);
+
+    let result = '';
+    let lastEnd = 0;
+    for (let i = 0; i < searchMatches.length; i++) {
+      const { from, to } = searchMatches[i];
+      const isActive = i === currentMatchIndex;
+      result += escapeHtml(markdown.slice(lastEnd, from));
+      result += isActive
+        ? `<mark class="search-match search-match-active">${escapeHtml(markdown.slice(from, to))}</mark>`
+        : `<mark class="search-match">${escapeHtml(markdown.slice(from, to))}</mark>`;
+      lastEnd = to;
+    }
+    result += escapeHtml(markdown.slice(lastEnd));
+    return result;
+  }, [markdown, searchQuery, searchMatches, currentMatchIndex]);
+
   return (
     <div className="editor-shell source-editor-shell">
-      <textarea
-        ref={textareaRef}
-        className="source-editor"
-        spellCheck="true"
-        value={markdown}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        aria-label="Markdown source"
-      />
+      {searchOpen && (
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          replaceText={replaceText}
+          onReplaceTextChange={setReplaceText}
+          matchIndex={currentMatchIndex}
+          totalMatches={searchMatches.length}
+          showReplace={showReplace}
+          onPrev={goToPrevMatch}
+          onNext={goToNextMatch}
+          onReplace={handleReplace}
+          onReplaceAll={handleReplaceAll}
+          onClose={handleCloseSearch}
+          onToggleReplace={() => setShowReplace((prev) => !prev)}
+        />
+      )}
+      <div className="source-editor-wrapper">
+        <pre
+          ref={highlightsRef}
+          className="source-editor-highlights"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{ __html: highlightedMarkdown + '\n' }}
+        />
+        <textarea
+          ref={textareaRef}
+          className="source-editor"
+          spellCheck="true"
+          value={markdown}
+          onChange={(event) => onChange(event.currentTarget.value)}
+          onScroll={handleScroll}
+          aria-label="Markdown source"
+        />
+      </div>
     </div>
   );
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function extractOutline(editor: Editor): OutlineItem[] {
