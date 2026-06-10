@@ -229,6 +229,17 @@ function App() {
     }
   }, [confirmDiscard, loadDocument]);
 
+  const handleOpenLocalFile = useCallback(async (path: string) => {
+    if (!confirmDiscard()) return;
+    try {
+      const payload = await ReadDocument(path);
+      loadDocument(payload);
+    } catch (error) {
+      console.error(error);
+      setMessage(`Could not open linked file: ${path}`);
+    }
+  }, [confirmDiscard, loadDocument]);
+
   const saveToPath = useCallback(async (path: string, markdown: string) => {
     const result = await SaveDocument(path, markdown);
     setDocumentState((current) => documentAfterSave(current, result));
@@ -504,6 +515,7 @@ function App() {
               onChange={handleMarkdownChange}
               onOutlineChange={setOutline}
               onEditorReady={setEditor}
+              onOpenLocalFile={handleOpenLocalFile}
             />
           )}
         </section>

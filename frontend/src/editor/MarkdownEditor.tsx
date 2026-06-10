@@ -21,6 +21,7 @@ import { htmlToMarkdown, markdownToHtml } from './markdown';
 import { languageLabel } from './languages';
 import { InlineCodeLanguage } from './InlineCodeLanguage';
 import { InlineLinkEditor } from './InlineLinkEditor';
+import { InlineTableMenu } from './InlineTableMenu';
 import { SearchBar } from './SearchBar';
 import { createSearchPlugin, findMatches, findMatchesInDoc, searchPluginKey, type SearchResult } from './searchPlugin';
 import type { OutlineItem } from '../types/app';
@@ -31,6 +32,7 @@ interface MarkdownEditorProps {
   onChange: (markdown: string) => void;
   onOutlineChange: (outline: OutlineItem[]) => void;
   onEditorReady: (editor: Editor | null) => void;
+  onOpenLocalFile?: (path: string) => void;
 }
 
 interface SourceMarkdownEditorProps extends MarkdownEditorProps {
@@ -53,6 +55,10 @@ type InlineEditState =
       target: HTMLElement;
     }
   | null;
+
+type TableMenuState = {
+  target: HTMLElement;
+} | null;
 
 const lowlight = createLowlight(common);
 
@@ -127,10 +133,37 @@ const MarkdownImage = Image.extend({
   },
 });
 
+function cleanLocalPath(href: string): string {
+  // Strip file:// protocol, query params, and hash fragments
+  const cleaned = href.replace(/^file:\/\/+/i, '').replace(/[?#].*$/, '');
+  return cleaned.trim();
+}
+
+function isLocalMdFile(href: string): boolean {
+  const cleaned = cleanLocalPath(href);
+  return !/^https?:\/\//i.test(cleaned) && /\.(md|markdown|mdown|mkd)$/i.test(cleaned);
+}
+
+function resolveLocalPath(href: string, documentPath: string): string {
+  const cleaned = cleanLocalPath(href);
+  // Already absolute path
+  if (/^[a-zA-Z]:[\\/]/.test(cleaned) || cleaned.startsWith('/') || cleaned.startsWith('\\')) {
+    return cleaned;
+  }
+  // Relative path: resolve against current document's directory
+  const dir = documentPath ? documentPath.replace(/[\\/][^\\/]*$/, '') : '';
+  if (!dir) return cleaned;
+  // Normalize separators for the platform
+  return dir.replace(/\\/g, '/') + '/' + cleaned;
+}
+
 function handleInlineClick(
   view: EditorView,
   event: MouseEvent,
-  setState: (state: InlineEditState) => void,
+  setInlineEdit: (state: InlineEditState) => void,
+  onOpenLocalFile: ((path: string) => void) | undefined,
+  setTableMenu: (state: TableMenuState) => void,
+  documentPath: string,
 ): boolean {
   const target = event.target as HTMLElement;
 
@@ -146,16 +179,22 @@ function handleInlineClick(
       const node = view.state.doc.nodeAt(pos);
       if (!node || node.type.name !== 'codeBlock') return false;
       const language = (node.attrs.language as string) || 'c';
-      setState({ type: 'code-language', pos, language, target: langTag });
+      setInlineEdit({ type: 'code-language', pos, language, target: langTag });
       return true;
     } catch {
       return false;
     }
   }
 
-  // Link click
+  // Link click — check before table cell so links inside tables still work
   const linkEl = target.closest('a');
   if (linkEl instanceof HTMLAnchorElement) {
+    const href = linkEl.getAttribute('href') || '';
+    // Local .md file: open in editor instead of showing link popover
+    if (isLocalMdFile(href) && onOpenLocalFile) {
+      onOpenLocalFile(resolveLocalPath(href, documentPath));
+      return true;
+    }
     if (event.ctrlKey || event.metaKey) {
       window.open(linkEl.href, '_blank');
       return true;
@@ -165,7 +204,7 @@ function handleInlineClick(
       const $pos = view.state.doc.resolve(pos);
       const linkMark = $pos.marks().find((m) => m.type.name === 'link');
       if (!linkMark) return false;
-      const href = (linkMark.attrs.href as string) || '';
+      const markHref = (linkMark.attrs.href as string) || '';
       const linkType = view.state.schema.marks.link;
 
       // Expand to find link range
@@ -173,7 +212,7 @@ function handleInlineClick(
       let to = pos;
       for (let i = pos - 1; i >= 0; i--) {
         const r = view.state.doc.resolve(i);
-        if (!r.marks().some((m) => m.type === linkType && m.attrs.href === href)) {
+        if (!r.marks().some((m) => m.type === linkType && m.attrs.href === markHref)) {
           from = i + 1;
           break;
         }
@@ -181,7 +220,7 @@ function handleInlineClick(
       }
       for (let i = pos + 1; i <= view.state.doc.content.size; i++) {
         const r = view.state.doc.resolve(i);
-        if (!r.marks().some((m) => m.type === linkType && m.attrs.href === href)) {
+        if (!r.marks().some((m) => m.type === linkType && m.attrs.href === markHref)) {
           to = i;
           break;
         }
@@ -189,20 +228,28 @@ function handleInlineClick(
       }
 
       const text = view.state.doc.textBetween(from, to);
-      setState({ type: 'link', from, to, text, href, target: linkEl });
+      setInlineEdit({ type: 'link', from, to, text, href: markHref, target: linkEl });
       return true;
     } catch {
       return false;
     }
   }
 
+  // Table cell click — only fires when NOT clicking on a link inside the cell
+  const cellEl = target.closest('td, th');
+  if (cellEl instanceof HTMLElement) {
+    setTableMenu({ target: cellEl });
+    return true;
+  }
+
   return false;
 }
 
-export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChange, onEditorReady }: MarkdownEditorProps) {
+export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChange, onEditorReady, onOpenLocalFile }: MarkdownEditorProps) {
   const lastInternalMarkdownRef = useRef(markdown);
   const lastDocumentPathRef = useRef(documentPath);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState>(null);
+  const [tableMenu, setTableMenu] = useState<TableMenuState>(null);
 
   // ── Search state ──
   const [searchOpen, setSearchOpen] = useState(false);
@@ -258,7 +305,7 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
       handleDOMEvents: {
         click(view, event) {
           if (!(event instanceof MouseEvent)) return false;
-          return handleInlineClick(view, event, setInlineEdit);
+          return handleInlineClick(view, event, setInlineEdit, onOpenLocalFile, setTableMenu, documentPath);
         },
         copy(view, event) {
           if (!(event instanceof ClipboardEvent)) return false;
@@ -511,9 +558,20 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
             setInlineEdit(null);
           }}
           onOpen={() => {
-            window.open(inlineEdit.href, '_blank');
+            if (isLocalMdFile(inlineEdit.href) && onOpenLocalFile) {
+              onOpenLocalFile(resolveLocalPath(inlineEdit.href, documentPath));
+            } else {
+              window.open(inlineEdit.href, '_blank');
+            }
           }}
           onClose={() => setInlineEdit(null)}
+        />
+      )}
+      {tableMenu && (
+        <InlineTableMenu
+          target={tableMenu.target}
+          editor={editor}
+          onClose={() => setTableMenu(null)}
         />
       )}
     </div>
