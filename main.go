@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -33,6 +34,9 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 245, G: 246, B: 248, A: 1},
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop: true,
+		},
+		Windows: &windows.Options{
+			WebviewGpuIsDisabled: true,
 		},
 		OnStartup:        app.startup,
 		Bind: []interface{}{

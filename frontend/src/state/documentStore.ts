@@ -133,8 +133,15 @@ export function calculateStats(markdown: string): DocumentStats {
 }
 
 export function nextTheme(theme: AppConfig['theme']): AppConfig['theme'] {
-  if (theme === 'system') return 'light';
+  const resolved = resolveTheme(theme);
+
+  if (theme === 'system') {
+    // Skip explicit mode that would look identical to system
+    return resolved === 'light' ? 'dark' : 'light';
+  }
   if (theme === 'light') return 'dark';
+  // theme === 'dark': if system is also dark, skip to light
+  if (resolved === 'dark') return 'light';
   return 'system';
 }
 

@@ -128,14 +128,8 @@ export function Toolbar({
 
   const setLink = () => {
     if (!editor) return;
-    const previousUrl = editor.getAttributes('link').href as string | undefined;
-    const url = window.prompt('Link URL', previousUrl ?? 'https://');
-    if (url === null) return;
-    if (url.trim() === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
-    }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+    editor.commands.focus();
+    window.dispatchEvent(new CustomEvent('md-go:open-link-popover'));
   };
 
   const addImage = () => {

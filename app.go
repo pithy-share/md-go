@@ -64,6 +64,11 @@ func (a *App) SaveDocumentAs(content string) (models.SaveResult, error) {
 	return a.files.SaveDocumentAs(content)
 }
 
+// PickMdFile opens a native file dialog filtered to .md files and returns the selected path.
+func (a *App) PickMdFile() (string, error) {
+	return a.files.PickMdFile()
+}
+
 func (a *App) GetRecentDocuments() ([]models.RecentDocument, error) {
 	return a.config.GetRecentDocuments()
 }

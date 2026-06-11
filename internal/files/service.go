@@ -240,6 +240,23 @@ func (s *Service) SaveDocumentAs(content string) (models.SaveResult, error) {
 	return s.SaveDocument(path, content)
 }
 
+// PickMdFile opens a native file dialog filtered to .md files and returns the selected path.
+// It does NOT read the file content; callers use the path for linking.
+func (s *Service) PickMdFile() (string, error) {
+	if s.ctx == nil {
+		return "", errors.New("application context is not ready")
+	}
+
+	path, err := runtime.OpenFileDialog(s.ctx, runtime.OpenDialogOptions{
+		Title:   "Select Markdown File",
+		Filters: markdownFilters,
+	})
+	if err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 func shouldSkipWorkspaceDir(name string) bool {
 	if name == "" {
 		return false

@@ -18,6 +18,8 @@ export function OpenDocument():Promise<models.DocumentPayload>;
 
 export function OpenFolder():Promise<models.Workspace>;
 
+export function PickMdFile():Promise<string>;
+
 export function ReadDocument(arg1:string):Promise<models.DocumentPayload>;
 
 export function ResetHotkeys():Promise<Array<models.HotkeyBinding>>;

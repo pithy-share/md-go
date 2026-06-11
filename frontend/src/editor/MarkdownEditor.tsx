@@ -22,6 +22,7 @@ import { languageLabel } from './languages';
 import { InlineCodeLanguage } from './InlineCodeLanguage';
 import { InlineLinkEditor } from './InlineLinkEditor';
 import { InlineTableMenu } from './InlineTableMenu';
+import { InsertLinkPopover } from './InsertLinkPopover';
 import { SearchBar } from './SearchBar';
 import { createSearchPlugin, findMatches, findMatchesInDoc, searchPluginKey, type SearchResult } from './searchPlugin';
 import type { OutlineItem } from '../types/app';
@@ -190,13 +191,13 @@ function handleInlineClick(
   const linkEl = target.closest('a');
   if (linkEl instanceof HTMLAnchorElement) {
     const href = linkEl.getAttribute('href') || '';
-    // Local .md file: open in editor instead of showing link popover
-    if (isLocalMdFile(href) && onOpenLocalFile) {
-      onOpenLocalFile(resolveLocalPath(href, documentPath));
-      return true;
-    }
     if (event.ctrlKey || event.metaKey) {
-      window.open(linkEl.href, '_blank');
+      // Ctrl+click: open local .md in editor, or external URL in browser
+      if (isLocalMdFile(href) && onOpenLocalFile) {
+        onOpenLocalFile(resolveLocalPath(href, documentPath));
+      } else {
+        window.open(linkEl.href, '_blank');
+      }
       return true;
     }
     try {
@@ -250,6 +251,8 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
   const lastDocumentPathRef = useRef(documentPath);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState>(null);
   const [tableMenu, setTableMenu] = useState<TableMenuState>(null);
+  const [insertLinkOpen, setInsertLinkOpen] = useState(false);
+  const [insertLinkInit, setInsertLinkInit] = useState<{ text: string; href: string }>({ text: '', href: '' });
 
   // ── Search state ──
   const [searchOpen, setSearchOpen] = useState(false);
@@ -358,14 +361,11 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
       // Ctrl+K → insert/edit link
       if (event.key === 'k' && !event.shiftKey) {
         event.preventDefault();
-        const previousUrl = editor.getAttributes('link').href as string | undefined;
-        const url = window.prompt('Link URL', previousUrl ?? 'https://');
-        if (url === null) return;
-        if (url.trim() === '') {
-          editor.chain().focus().extendMarkRange('link').unsetLink().run();
-          return;
-        }
-        editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+        const { from, to, empty } = editor.state.selection;
+        const selectedText = empty ? '' : editor.state.doc.textBetween(from, to, ' ');
+        const previousUrl = (editor.getAttributes('link').href as string) || '';
+        setInsertLinkInit({ text: selectedText, href: previousUrl });
+        setInsertLinkOpen(true);
         return;
       }
 
@@ -399,6 +399,43 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
     window.addEventListener('md-go:open-search', handler);
     return () => window.removeEventListener('md-go:open-search', handler);
   }, []);
+
+  // ── Link popover: listen for global insert-link trigger ──
+  useEffect(() => {
+    const handler = () => {
+      if (!editor) return;
+      const { from, to, empty } = editor.state.selection;
+      const selectedText = empty ? '' : editor.state.doc.textBetween(from, to, ' ');
+      const previousUrl = (editor.getAttributes('link').href as string) || '';
+      setInsertLinkInit({ text: selectedText, href: previousUrl });
+      setInsertLinkOpen(true);
+    };
+    window.addEventListener('md-go:open-link-popover', handler);
+    return () => window.removeEventListener('md-go:open-link-popover', handler);
+  }, [editor]);
+
+  // ── Scroll caret fix: force repaint after scroll to correct WebView2 compositor color ──
+  useEffect(() => {
+    if (!editor) return;
+    const scrollArea = editor.view.dom.closest('.document-area');
+    if (!scrollArea) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const handleScroll = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const dom = editor.view.dom;
+        dom.style.caretColor = 'transparent';
+        requestAnimationFrame(() => {
+          dom.style.caretColor = '';
+        });
+      }, 150);
+    };
+    scrollArea.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      scrollArea.removeEventListener('scroll', handleScroll);
+    };
+  }, [editor]);
 
   // ── Search: register ProseMirror plugin ──
   useEffect(() => {
@@ -572,6 +609,31 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
           target={tableMenu.target}
           editor={editor}
           onClose={() => setTableMenu(null)}
+        />
+      )}
+      {insertLinkOpen && editor && (
+        <InsertLinkPopover
+          editor={editor}
+          initialText={insertLinkInit.text}
+          initialUrl={insertLinkInit.href}
+          documentPath={documentPath}
+          onConfirm={(text, href) => {
+            const chain = editor.chain().focus();
+            const { empty, from } = editor.state.selection;
+            if (!empty) {
+              chain.extendMarkRange('link').setLink({ href }).run();
+            } else {
+              // No selection: insert text, select it, apply link, move cursor to end
+              chain
+                .insertContent(text)
+                .setTextSelection({ from, to: from + text.length })
+                .setLink({ href })
+                .setTextSelection(from + text.length)
+                .run();
+            }
+            setInsertLinkOpen(false);
+          }}
+          onCancel={() => setInsertLinkOpen(false)}
         />
       )}
     </div>

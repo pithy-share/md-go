@@ -50,6 +50,22 @@ function App() {
   const [hotkeySettingsOpen, setHotkeySettingsOpen] = useState(false);
   const actionHandlersRef = useRef<Record<string, () => void>>({});
 
+  // ── File navigation history ──
+  const fileNavRef = useRef<{ history: string[]; index: number }>({ history: [], index: -1 });
+  const [fileNavHistory, setFileNavHistory] = useState<string[]>([]);
+  const [fileNavIndex, setFileNavIndex] = useState(-1);
+
+  const pushFileNav = useCallback((path: string) => {
+    const { history, index } = fileNavRef.current;
+    const newHistory = history.slice(0, index + 1);
+    if (newHistory.length > 0 && newHistory[newHistory.length - 1] === path) return;
+    const nextHistory = [...newHistory, path];
+    const nextIndex = nextHistory.length - 1;
+    fileNavRef.current = { history: nextHistory, index: nextIndex };
+    setFileNavHistory(nextHistory);
+    setFileNavIndex(nextIndex);
+  }, []);
+
   const stats = useMemo(() => calculateStats(documentState.markdown), [documentState.markdown]);
   const effectiveTheme = resolveTheme(config.theme);
 
@@ -218,27 +234,49 @@ function App() {
     }
   }, [config, persistConfig]);
 
-  const handleOpenWorkspaceFile = useCallback(async (path: string) => {
+  const handleOpenWorkspaceFile = useCallback(async (path: string, skipHistory = false) => {
     if (!confirmDiscard()) return;
     try {
       const payload = await ReadDocument(path);
       loadDocument(payload);
+      if (!skipHistory) {
+        pushFileNav(path);
+      }
     } catch (error) {
       console.error(error);
       setMessage('Workspace file is unavailable');
     }
-  }, [confirmDiscard, loadDocument]);
+  }, [confirmDiscard, loadDocument, pushFileNav]);
 
   const handleOpenLocalFile = useCallback(async (path: string) => {
     if (!confirmDiscard()) return;
     try {
       const payload = await ReadDocument(path);
       loadDocument(payload);
+      pushFileNav(path);
     } catch (error) {
       console.error(error);
       setMessage(`Could not open linked file: ${path}`);
     }
-  }, [confirmDiscard, loadDocument]);
+  }, [confirmDiscard, loadDocument, pushFileNav]);
+
+  const goBack = useCallback(() => {
+    const { history, index } = fileNavRef.current;
+    if (index <= 0) return;
+    const newIndex = index - 1;
+    fileNavRef.current = { ...fileNavRef.current, index: newIndex };
+    setFileNavIndex(newIndex);
+    void handleOpenWorkspaceFile(history[newIndex], true);
+  }, [handleOpenWorkspaceFile]);
+
+  const goForward = useCallback(() => {
+    const { history, index } = fileNavRef.current;
+    if (index >= history.length - 1) return;
+    const newIndex = index + 1;
+    fileNavRef.current = { ...fileNavRef.current, index: newIndex };
+    setFileNavIndex(newIndex);
+    void handleOpenWorkspaceFile(history[newIndex], true);
+  }, [handleOpenWorkspaceFile]);
 
   const saveToPath = useCallback(async (path: string, markdown: string) => {
     const result = await SaveDocument(path, markdown);
@@ -311,16 +349,7 @@ function App() {
   }, []);
 
   const handleLinkAction = useCallback(() => {
-    const ed = editorRef.current;
-    if (!ed) return;
-    const previousUrl = ed.getAttributes('link').href as string | undefined;
-    const url = window.prompt('Link URL', previousUrl ?? 'https://');
-    if (url === null) return;
-    if (url.trim() === '') {
-      ed.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
-    }
-    ed.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+    window.dispatchEvent(new CustomEvent('md-go:open-link-popover'));
   }, []);
 
   const handleFindAction = useCallback(() => {
@@ -352,6 +381,26 @@ function App() {
       find: () => handleFindAction(),
     };
   });
+
+  // ── File navigation: Alt+Left/Right ──
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          goBack();
+          return;
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          goForward();
+          return;
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [goBack, goForward]);
 
   // ── Global keydown: match against dynamic hotkey bindings ──
   useEffect(() => {
@@ -471,7 +520,7 @@ function App() {
     <div className="app-frame" style={{ '--wails-drop-target': '1' } as React.CSSProperties}>
       <Toolbar
         editor={editor}
-        theme={config.theme}
+        theme={effectiveTheme}
         sidebarVisible={config.showSidebar}
         outlineVisible={config.showOutline}
         editorMode={config.editorMode}
