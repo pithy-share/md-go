@@ -229,6 +229,42 @@ function App() {
     }
   }, [tabs, activeTabIndex]);
 
+  const confirmDirtyRange = (indices: number[]) => {
+    const dirty = indices.filter(i => tabs[i]?.isDirty);
+    if (dirty.length === 0) return true;
+    return window.confirm(`${dirty.length} tab(s) have unsaved changes. Discard changes?`);
+  };
+
+  const handleCloseAll = useCallback(() => {
+    const allIndices = tabs.map((_, i) => i);
+    if (!confirmDirtyRange(allIndices)) return;
+    setTabs([createEmptyDocument()]);
+    setActiveTabIndex(0);
+    setOutline([]);
+  }, [tabs]);
+
+  const handleCloseRight = useCallback((index: number) => {
+    const rightIndices = tabs.map((_, i) => i).filter(i => i > index);
+    if (rightIndices.length === 0) return;
+    if (!confirmDirtyRange(rightIndices)) return;
+    setTabs(prev => prev.filter((_, i) => i <= index));
+    if (activeTabIndex > index) {
+      setActiveTabIndex(index);
+    }
+  }, [tabs, activeTabIndex]);
+
+  const handleCloseLeft = useCallback((index: number) => {
+    const leftIndices = tabs.map((_, i) => i).filter(i => i < index);
+    if (leftIndices.length === 0) return;
+    if (!confirmDirtyRange(leftIndices)) return;
+    setTabs(prev => prev.filter((_, i) => i >= index));
+    if (activeTabIndex < index) {
+      setActiveTabIndex(0);
+    } else {
+      setActiveTabIndex(activeTabIndex - index);
+    }
+  }, [tabs, activeTabIndex]);
+
   const handleOpenWorkspaceFile = useCallback(async (path: string, skipHistory = false) => {
     const existingIndex = tabs.findIndex(t => t.path === path);
     if (existingIndex >= 0) {
@@ -637,6 +673,9 @@ function App() {
         onSelectTab={setActiveTabIndex}
         onCloseTab={handleCloseTab}
         onNewTab={handleNew}
+        onCloseAll={handleCloseAll}
+        onCloseRight={handleCloseRight}
+        onCloseLeft={handleCloseLeft}
       />
       <main className="workspace">
         {config.showSidebar && (
