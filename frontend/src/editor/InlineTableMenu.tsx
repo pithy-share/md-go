@@ -11,10 +11,11 @@ function IconInsertRowAbove() {
       <rect x="2" y="4" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="2" y="7" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="2" y="10" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* insert marker above: dashed line + plus */}
-      <rect x="2" y="0.5" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
-      <line x1="7" y1="-0.5" x2="7" y2="3.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
-      <line x1="4.5" y1="1.5" x2="9.5" y2="1.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      {/* dashed placeholder row above */}
+      <rect x="2" y="0.5" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      {/* green plus sign */}
+      <line x1="7" y1="0" x2="7" y2="3" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
+      <line x1="5.5" y1="1.5" x2="8.5" y2="1.5" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -26,10 +27,11 @@ function IconInsertRowBelow() {
       <rect x="2" y="1" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="2" y="4" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="2" y="7" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* insert marker below: dashed line + plus */}
-      <rect x="2" y="10.5" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
-      <line x1="7" y1="9.5" x2="7" y2="13.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
-      <line x1="4.5" y1="11.5" x2="9.5" y2="11.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      {/* dashed placeholder row below */}
+      <rect x="2" y="10.5" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      {/* green plus sign */}
+      <line x1="7" y1="10" x2="7" y2="13" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
+      <line x1="5.5" y1="11.5" x2="8.5" y2="11.5" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -37,14 +39,13 @@ function IconInsertRowBelow() {
 function IconDeleteRow() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      {/* Top & bottom rows intact */}
+      {/* 3 rows: top & bottom intact, middle dimmed */}
       <rect x="2" y="1" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="2" y="6" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.2" />
       <rect x="2" y="11" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* Middle row with X over it */}
-      <rect x="2" y="6" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.3" />
-      <line x1="4" y1="7" x2="10" y2="7" stroke="currentColor" strokeWidth="1.2" opacity="0.8" />
-      {/* vertical stem of cross */}
-      <line x1="7" y1="4.5" x2="7" y2="9.5" stroke="currentColor" strokeWidth="0.9" opacity="0.6" />
+      {/* red cross over middle row */}
+      <line x1="4" y1="7" x2="10" y2="7" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
+      <line x1="7" y1="4.5" x2="7" y2="9.5" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
@@ -56,10 +57,11 @@ function IconInsertColLeft() {
       <rect x="5" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="8" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="11" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* insert marker left: dashed column + plus */}
-      <rect x="1" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
-      <line x1="2" y1="7" x2="5.5" y2="7" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
-      <line x1="3.75" y1="5" x2="3.75" y2="9" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      {/* dashed placeholder column on left */}
+      <rect x="1" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      {/* green plus sign */}
+      <line x1="2" y1="7" x2="5" y2="7" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
+      <line x1="3.5" y1="5.5" x2="3.5" y2="8.5" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -71,10 +73,11 @@ function IconInsertColRight() {
       <rect x="0" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="3" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="6" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* insert marker right: dashed column + plus */}
-      <rect x="9.5" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
-      <line x1="8.5" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
-      <line x1="10.25" y1="5" x2="10.25" y2="9" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      {/* dashed placeholder column on right */}
+      <rect x="9.5" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      {/* green plus sign */}
+      <line x1="9" y1="7" x2="12" y2="7" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
+      <line x1="10.5" y1="5.5" x2="10.5" y2="8.5" stroke="#059669" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -82,13 +85,13 @@ function IconInsertColRight() {
 function IconDeleteCol() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      {/* Left & right columns intact */}
+      {/* 3 columns: left & right intact, middle dimmed */}
       <rect x="1" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="6" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.2" />
       <rect x="11" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* Middle column with X over it */}
-      <rect x="6" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.3" />
-      <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" strokeWidth="1.2" opacity="0.8" />
-      <line x1="5" y1="7" x2="9" y2="7" stroke="currentColor" strokeWidth="0.9" opacity="0.6" />
+      {/* red cross over middle column */}
+      <line x1="7" y1="2" x2="7" y2="12" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
+      <line x1="4.5" y1="7" x2="9.5" y2="7" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
