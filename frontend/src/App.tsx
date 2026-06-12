@@ -247,11 +247,16 @@ function App() {
     const closable = tabs.filter(t => !t.locked);
     if (closable.length === 0) return;
     if (!confirmDirtyRange(closable.map(t => tabs.indexOf(t)))) return;
-    const activeWasLocked = tabs[activeTabIndex]?.locked;
-    setTabs(prev => prev.filter(t => t.locked));
-    if (!activeWasLocked) {
-      setActiveTabIndex(0);
-    }
+    const activeId = tabs[activeTabIndex]?.id;
+    const lockedTabs = tabs.filter(t => t.locked);
+    const newActiveIndex = lockedTabs.length > 0
+      ? Math.max(0, lockedTabs.findIndex(t => t.id === activeId))
+      : 0;
+    setTabs(prev => {
+      const remaining = prev.filter(t => t.locked);
+      return remaining.length > 0 ? remaining : [createEmptyDocument()];
+    });
+    setActiveTabIndex(newActiveIndex);
     setOutline([]);
   }, [tabs, activeTabIndex]);
 

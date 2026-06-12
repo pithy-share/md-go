@@ -39,13 +39,13 @@ function IconInsertRowBelow() {
 function IconDeleteRow() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      {/* 3 rows: top & bottom intact, middle dimmed */}
+      {/* 3 rows */}
       <rect x="2" y="1" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
-      <rect x="2" y="6" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.2" />
+      <rect x="2" y="6" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="2" y="11" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* red cross over middle row */}
-      <line x1="4" y1="7" x2="10" y2="7" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
-      <line x1="7" y1="4.5" x2="7" y2="9.5" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
+      {/* red X over the table */}
+      <line x1="3.5" y1="2.5" x2="10.5" y2="11.5" stroke="#e06c75" strokeWidth="1.7" strokeLinecap="round" />
+      <line x1="10.5" y1="2.5" x2="3.5" y2="11.5" stroke="#e06c75" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
   );
 }
@@ -85,13 +85,13 @@ function IconInsertColRight() {
 function IconDeleteCol() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      {/* 3 columns: left & right intact, middle dimmed */}
+      {/* 3 columns */}
       <rect x="1" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
-      <rect x="6" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.2" />
+      <rect x="6" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
       <rect x="11" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
-      {/* red cross over middle column */}
-      <line x1="7" y1="2" x2="7" y2="12" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
-      <line x1="4.5" y1="7" x2="9.5" y2="7" stroke="#e06c75" strokeWidth="1.3" strokeLinecap="round" />
+      {/* red X over the table */}
+      <line x1="2.5" y1="3.5" x2="11.5" y2="10.5" stroke="#e06c75" strokeWidth="1.7" strokeLinecap="round" />
+      <line x1="11.5" y1="3.5" x2="2.5" y2="10.5" stroke="#e06c75" strokeWidth="1.7" strokeLinecap="round" />
     </svg>
   );
 }
@@ -167,20 +167,20 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             <IconInsertRowAbove />
           </button>
           <button
-            className="inline-table-menu-btn"
-            title="Insert row below"
-            onClick={() => runCommand(() => editor?.chain().focus().addRowAfter().run())}
-            type="button"
-          >
-            <IconInsertRowBelow />
-          </button>
-          <button
             className="inline-table-menu-btn danger"
             title="Delete row"
             onClick={() => runCommand(() => editor?.chain().focus().deleteRow().run())}
             type="button"
           >
             <IconDeleteRow />
+          </button>
+          <button
+            className="inline-table-menu-btn"
+            title="Insert row below"
+            onClick={() => runCommand(() => editor?.chain().focus().addRowAfter().run())}
+            type="button"
+          >
+            <IconInsertRowBelow />
           </button>
         </div>
         <div className="inline-table-menu-group">
@@ -194,20 +194,20 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             <IconInsertColLeft />
           </button>
           <button
-            className="inline-table-menu-btn"
-            title="Insert column right"
-            onClick={() => runCommand(() => editor?.chain().focus().addColumnAfter().run())}
-            type="button"
-          >
-            <IconInsertColRight />
-          </button>
-          <button
             className="inline-table-menu-btn danger"
             title="Delete column"
             onClick={() => runCommand(() => editor?.chain().focus().deleteColumn().run())}
             type="button"
           >
             <IconDeleteCol />
+          </button>
+          <button
+            className="inline-table-menu-btn"
+            title="Insert column right"
+            onClick={() => runCommand(() => editor?.chain().focus().addColumnAfter().run())}
+            type="button"
+          >
+            <IconInsertColRight />
           </button>
         </div>
       </div>
