@@ -250,6 +250,7 @@ function handleInlineClick(
 export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChange, onEditorReady, onOpenLocalFile }: MarkdownEditorProps) {
   const lastInternalMarkdownRef = useRef(markdown);
   const lastDocumentPathRef = useRef(documentPath);
+  const skipInitialUpdateRef = useRef(true);
   const [inlineEdit, setInlineEdit] = useState<InlineEditState>(null);
   const [tableMenu, setTableMenu] = useState<TableMenuState>(null);
   const [insertLinkOpen, setInsertLinkOpen] = useState(false);
@@ -323,6 +324,12 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
     },
     onUpdate({ editor }) {
       const nextMarkdown = htmlToMarkdown(editor.getHTML());
+      if (skipInitialUpdateRef.current) {
+        skipInitialUpdateRef.current = false;
+        lastInternalMarkdownRef.current = nextMarkdown;
+        onOutlineChange(extractOutline(editor));
+        return;
+      }
       lastInternalMarkdownRef.current = nextMarkdown;
       onChange(nextMarkdown);
       onOutlineChange(extractOutline(editor));
