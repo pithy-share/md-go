@@ -1,7 +1,97 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Editor } from '@tiptap/react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Trash2 } from 'lucide-react';
+
+// ── Inline SVG table icons (16x16) ──
+
+function IconInsertRowAbove() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      {/* 3 existing rows */}
+      <rect x="2" y="4" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="2" y="7" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="2" y="10" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      {/* insert marker above: dashed line + plus */}
+      <rect x="2" y="0.5" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      <line x1="7" y1="-0.5" x2="7" y2="3.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      <line x1="4.5" y1="1.5" x2="9.5" y2="1.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+    </svg>
+  );
+}
+
+function IconInsertRowBelow() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      {/* 3 existing rows */}
+      <rect x="2" y="1" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="2" y="4" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="2" y="7" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      {/* insert marker below: dashed line + plus */}
+      <rect x="2" y="10.5" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      <line x1="7" y1="9.5" x2="7" y2="13.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      <line x1="4.5" y1="11.5" x2="9.5" y2="11.5" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+    </svg>
+  );
+}
+
+function IconDeleteRow() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      {/* Top & bottom rows intact */}
+      <rect x="2" y="1" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="2" y="11" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.85" />
+      {/* Middle row with X over it */}
+      <rect x="2" y="6" width="10" height="2" rx="0.5" fill="currentColor" opacity="0.3" />
+      <line x1="4" y1="7" x2="10" y2="7" stroke="currentColor" strokeWidth="1.2" opacity="0.8" />
+      {/* vertical stem of cross */}
+      <line x1="7" y1="4.5" x2="7" y2="9.5" stroke="currentColor" strokeWidth="0.9" opacity="0.6" />
+    </svg>
+  );
+}
+
+function IconInsertColLeft() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      {/* 3 existing columns */}
+      <rect x="5" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="8" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="11" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      {/* insert marker left: dashed column + plus */}
+      <rect x="1" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      <line x1="2" y1="7" x2="5.5" y2="7" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      <line x1="3.75" y1="5" x2="3.75" y2="9" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+    </svg>
+  );
+}
+
+function IconInsertColRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      {/* 3 existing columns */}
+      <rect x="0" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="3" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="6" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      {/* insert marker right: dashed column + plus */}
+      <rect x="9.5" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.25" stroke="currentColor" strokeWidth="0.4" strokeDasharray="1 0.8" />
+      <line x1="8.5" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+      <line x1="10.25" y1="5" x2="10.25" y2="9" stroke="currentColor" strokeWidth="1.2" opacity="0.7" />
+    </svg>
+  );
+}
+
+function IconDeleteCol() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      {/* Left & right columns intact */}
+      <rect x="1" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      <rect x="11" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.85" />
+      {/* Middle column with X over it */}
+      <rect x="6" y="2" width="2" height="10" rx="0.5" fill="currentColor" opacity="0.3" />
+      <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" strokeWidth="1.2" opacity="0.8" />
+      <line x1="5" y1="7" x2="9" y2="7" stroke="currentColor" strokeWidth="0.9" opacity="0.6" />
+    </svg>
+  );
+}
 
 interface InlineTableMenuProps {
   target: HTMLElement;
@@ -71,7 +161,7 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             onClick={() => runCommand(() => editor?.chain().focus().addRowBefore().run())}
             type="button"
           >
-            <ArrowUp size={15} />
+            <IconInsertRowAbove />
           </button>
           <button
             className="inline-table-menu-btn"
@@ -79,7 +169,7 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             onClick={() => runCommand(() => editor?.chain().focus().addRowAfter().run())}
             type="button"
           >
-            <ArrowDown size={15} />
+            <IconInsertRowBelow />
           </button>
           <button
             className="inline-table-menu-btn danger"
@@ -87,7 +177,7 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             onClick={() => runCommand(() => editor?.chain().focus().deleteRow().run())}
             type="button"
           >
-            <Trash2 size={15} />
+            <IconDeleteRow />
           </button>
         </div>
         <div className="inline-table-menu-group">
@@ -98,7 +188,7 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             onClick={() => runCommand(() => editor?.chain().focus().addColumnBefore().run())}
             type="button"
           >
-            <ArrowLeft size={15} />
+            <IconInsertColLeft />
           </button>
           <button
             className="inline-table-menu-btn"
@@ -106,7 +196,7 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             onClick={() => runCommand(() => editor?.chain().focus().addColumnAfter().run())}
             type="button"
           >
-            <ArrowRight size={15} />
+            <IconInsertColRight />
           </button>
           <button
             className="inline-table-menu-btn danger"
@@ -114,7 +204,7 @@ export function InlineTableMenu({ target, editor, onClose }: InlineTableMenuProp
             onClick={() => runCommand(() => editor?.chain().focus().deleteColumn().run())}
             type="button"
           >
-            <Trash2 size={15} />
+            <IconDeleteCol />
           </button>
         </div>
       </div>
