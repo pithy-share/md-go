@@ -29,9 +29,11 @@ import {
   SaveDocument,
   SaveDocumentAs,
   ScanFolder,
+  WatchFile,
+  UnwatchFile,
 } from '../wailsjs/go/main/App';
 import { models } from '../wailsjs/go/models';
-import { LogPrint, OnFileDrop, OnFileDropOff, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime';
+import { LogPrint, OnFileDrop, OnFileDropOff, EventsOn, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime';
 import { HotkeySettings } from './components/HotkeySettings';
 import { TabBar } from './components/TabBar';
 
@@ -70,6 +72,10 @@ function App() {
   const fileNavRef = useRef<{ history: string[]; index: number }>({ history: [], index: -1 });
   const [fileNavHistory, setFileNavHistory] = useState<string[]>([]);
   const [fileNavIndex, setFileNavIndex] = useState(-1);
+
+  // ── External file change detection ──
+  const tabsRef = useRef<DocumentState[]>(tabs);
+  tabsRef.current = tabs;
 
   const pushFileNav = useCallback((path: string) => {
     const { history, index } = fileNavRef.current;
@@ -111,6 +117,9 @@ function App() {
           const restoredTab = documentFromPayload(payload);
           setTabs([restoredTab]);
           setActiveTabIndex(0);
+          if (payload.lastModified) {
+            void WatchFile(payload.path, payload.lastModified);
+          }
           setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}`);
         } catch {
           // File may have been moved or deleted — clear the stale recent entry
@@ -200,6 +209,9 @@ function App() {
       setActiveTabIndex(tabs.length);
       setOutline([]);
       pushFileNav(payload.path);
+      if (payload.lastModified) {
+        void WatchFile(payload.path, payload.lastModified);
+      }
       setMessage(`Opened ${payload.name}`);
     } catch (error) {
       console.error(error);
@@ -219,6 +231,10 @@ function App() {
     if (tab.isDirty) {
       const discard = window.confirm(`"${tab.name}" has unsaved changes. Discard changes?`);
       if (!discard) return;
+    }
+
+    if (tab.path) {
+      void UnwatchFile(tab.path);
     }
 
     if (tabs.length <= 1) {
@@ -247,6 +263,10 @@ function App() {
     const closable = tabs.filter(t => !t.locked);
     if (closable.length === 0) return;
     if (!confirmDirtyRange(closable.map(t => tabs.indexOf(t)))) return;
+    // Unwatch all closing tabs
+    for (const t of closable) {
+      if (t.path) void UnwatchFile(t.path);
+    }
     const activeId = tabs[activeTabIndex]?.id;
     const lockedTabs = tabs.filter(t => t.locked);
     const newActiveIndex = lockedTabs.length > 0
@@ -264,6 +284,9 @@ function App() {
     const closable = tabs.filter((t, i) => i > index && !t.locked);
     if (closable.length === 0) return;
     if (!confirmDirtyRange(closable.map(t => tabs.indexOf(t)))) return;
+    for (const t of closable) {
+      if (t.path) void UnwatchFile(t.path);
+    }
     setTabs(prev => prev.filter((t, i) => i <= index || t.locked));
     if (activeTabIndex > index && !tabs[activeTabIndex]?.locked) {
       setActiveTabIndex(index);
@@ -274,6 +297,9 @@ function App() {
     const closable = tabs.filter((t, i) => i < index && !t.locked);
     if (closable.length === 0) return;
     if (!confirmDirtyRange(closable.map(t => tabs.indexOf(t)))) return;
+    for (const t of closable) {
+      if (t.path) void UnwatchFile(t.path);
+    }
     setTabs(prev => prev.filter((t, i) => i >= index || t.locked));
     if (activeTabIndex < index && !tabs[activeTabIndex]?.locked) {
       setActiveTabIndex(0);
@@ -319,6 +345,9 @@ function App() {
         const payload = await ReadDocument(path);
         updateActiveTab(() => documentFromPayload(payload));
         if (!skipHistory) pushFileNav(path);
+        if (payload.lastModified) {
+          void WatchFile(path, payload.lastModified);
+        }
       } catch (error) {
         console.error(error);
         setMessage('Workspace file is unavailable');
@@ -332,6 +361,9 @@ function App() {
       setTabs(prev => [...prev, newTab]);
       setActiveTabIndex(tabs.length);
       if (!skipHistory) pushFileNav(path);
+      if (payload.lastModified) {
+        void WatchFile(path, payload.lastModified);
+      }
     } catch (error) {
       console.error(error);
       setMessage('Workspace file is unavailable');
@@ -352,6 +384,9 @@ function App() {
         const payload = await ReadDocument(path);
         updateActiveTab(() => documentFromPayload(payload));
         pushFileNav(path);
+        if (payload.lastModified) {
+          void WatchFile(path, payload.lastModified);
+        }
       } catch (error) {
         console.error(error);
         setMessage(`Could not open linked file: ${path}`);
@@ -365,6 +400,9 @@ function App() {
       setTabs(prev => [...prev, newTab]);
       setActiveTabIndex(tabs.length);
       pushFileNav(path);
+      if (payload.lastModified) {
+        void WatchFile(path, payload.lastModified);
+      }
     } catch (error) {
       console.error(error);
       setMessage(`Could not open linked file: ${path}`);
@@ -397,11 +435,13 @@ function App() {
       if (activeTab.path) {
         const result = await saveToPath(activeTab.path, activeTab.markdown);
         updateActiveTab((current) => documentAfterSave(current, result));
+        void WatchFile(result.path, result.savedAt);
         setMessage(`Saved ${result.name}`);
       } else {
         const result: SaveResult = await SaveDocumentAs(activeTab.markdown);
         if (!result?.path) return;
         updateActiveTab((current) => documentAfterSave(current, result));
+        void WatchFile(result.path, result.savedAt);
         setMessage(`Saved ${result.name}`);
       }
     } catch (error) {
@@ -415,6 +455,7 @@ function App() {
       const result: SaveResult = await SaveDocumentAs(activeTab.markdown);
       if (!result?.path) return;
       updateActiveTab((current) => documentAfterSave(current, result));
+      void WatchFile(result.path, result.savedAt);
       setMessage(`Saved ${result.name}`);
     } catch (error) {
       console.error(error);
@@ -666,6 +707,7 @@ function App() {
     const timeout = window.setTimeout(() => {
       void saveToPath(activeTab.path, activeTab.markdown).then(result => {
         updateActiveTab(current => documentAfterSave(current, result));
+        void WatchFile(result.path, result.savedAt);
       }).catch((error) => {
         console.error(error);
         setMessage('Auto save failed');
@@ -683,6 +725,54 @@ function App() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [tabs]);
+
+  // ── External file change detection ──
+  useEffect(() => {
+    const cancel = EventsOn('file-external-change', (path: string, newLastModified: string) => {
+      if (!path) return;
+      const currentTabs = tabsRef.current;
+      const tabIndex = currentTabs.findIndex(t => t.path === path);
+      if (tabIndex === -1) return;
+
+      const tab = currentTabs[tabIndex];
+      if (tab.isDirty) {
+        const reload = window.confirm(
+          `"${tab.name}" has been modified externally.\n\nDo you want to reload it? Your unsaved changes will be lost.`
+        );
+        if (!reload) {
+          // User chose to keep local version — re-watch with new mod time so we don't keep prompting
+          if (newLastModified) {
+            void WatchFile(path, newLastModified);
+          }
+          return;
+        }
+      }
+
+      // Reload the file content
+      ReadDocument(path)
+        .then((payload) => {
+          if (!payload?.path) return;
+          const currentTabsAfter = tabsRef.current;
+          const idx = currentTabsAfter.findIndex(t => t.path === path);
+          if (idx === -1) return;
+          setTabs(prev => prev.map(t => t.path === path ? documentFromPayload(payload) : t));
+          setMessage(`Reloaded ${payload.name} (external change)`);
+          // Re-watch with the new mod time
+          if (payload.lastModified) {
+            void WatchFile(path, payload.lastModified);
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+          setMessage(`Failed to reload ${path}`);
+        });
+    });
+
+    return () => {
+      cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="app-frame" style={{ '--wails-drop-target': '1' } as React.CSSProperties}>

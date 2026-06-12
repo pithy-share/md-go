@@ -66,6 +66,14 @@ export function ScanFolder(arg1) {
   return window['go']['main']['App']['ScanFolder'](arg1);
 }
 
+export function UnwatchFile(arg1) {
+  return window['go']['main']['App']['UnwatchFile'](arg1);
+}
+
 export function UpdateRecentDocument(arg1) {
   return window['go']['main']['App']['UpdateRecentDocument'](arg1);
+}
+
+export function WatchFile(arg1, arg2) {
+  return window['go']['main']['App']['WatchFile'](arg1, arg2);
 }

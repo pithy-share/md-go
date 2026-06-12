@@ -34,4 +34,8 @@ export function SaveHotkeys(arg1:Array<models.HotkeyBinding>):Promise<Array<mode
 
 export function ScanFolder(arg1:string):Promise<models.Workspace>;
 
+export function UnwatchFile(arg1:string):Promise<void>;
+
 export function UpdateRecentDocument(arg1:string):Promise<void>;
+
+export function WatchFile(arg1:string,arg2:string):Promise<void>;

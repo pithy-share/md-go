@@ -110,3 +110,13 @@ func (a *App) ResetHotkeys() ([]models.HotkeyBinding, error) {
 func (a *App) DebugLog(msg string) {
 	a.config.AppendDebugLog(msg)
 }
+
+// WatchFile registers a file for external modification monitoring.
+func (a *App) WatchFile(path string, lastModified string) {
+	a.files.WatchFile(path, lastModified)
+}
+
+// UnwatchFile removes a file from external modification monitoring.
+func (a *App) UnwatchFile(path string) {
+	a.files.UnwatchFile(path)
+}

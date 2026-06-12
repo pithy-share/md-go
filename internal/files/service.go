@@ -2,12 +2,16 @@ package files
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -37,10 +41,15 @@ var skippedWorkspaceDirs = map[string]struct{}{
 type Service struct {
 	ctx    context.Context
 	config *config.Service
+
+	watcherMu    sync.Mutex
+	watchedFiles map[string]time.Time // path -> last known ModTime
+	watchedHash  map[string]string    // path -> sha256 hex of last known content
+	watcherDone  chan struct{}
 }
 
 func NewService(configService *config.Service) *Service {
-	return &Service{config: configService}
+	return &Service{config: configService, watchedFiles: make(map[string]time.Time), watchedHash: make(map[string]string)}
 }
 
 func (s *Service) SetContext(ctx context.Context) {
@@ -255,6 +264,152 @@ func (s *Service) PickMdFile() (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// ── File watcher ──
+
+// fileHash returns the SHA-256 hex digest of the file at path.
+func fileHash(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// startFileWatcher begins polling watched files for external modifications.
+// Emits "file-external-change" Wails events when a file's content hash changes.
+func (s *Service) startFileWatcher() {
+	s.watcherDone = make(chan struct{})
+	ticker := time.NewTicker(2 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				s.pollWatchedFiles()
+			case <-s.watcherDone:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+}
+
+func (s *Service) pollWatchedFiles() {
+	s.watcherMu.Lock()
+	paths := make([]string, 0, len(s.watchedFiles))
+	for p := range s.watchedFiles {
+		paths = append(paths, p)
+	}
+	s.watcherMu.Unlock()
+
+	if s.ctx == nil {
+		return
+	}
+
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			// File deleted — remove from watch and notify
+			s.watcherMu.Lock()
+			delete(s.watchedFiles, p)
+			delete(s.watchedHash, p)
+			s.watcherMu.Unlock()
+			runtime.EventsEmit(s.ctx, "file-external-change", p, "")
+			continue
+		}
+
+		modTime := info.ModTime()
+		s.watcherMu.Lock()
+		lastKnown, exists := s.watchedFiles[p]
+		s.watcherMu.Unlock()
+
+		if !exists {
+			continue
+		}
+
+		if !modTime.After(lastKnown) {
+			continue
+		}
+
+		// ModTime changed — verify content actually differs before emitting
+		newModStr := modTime.Format(time.RFC3339)
+		newHash, hashErr := fileHash(p)
+
+		s.watcherMu.Lock()
+		oldHash, hadHash := s.watchedHash[p]
+		s.watchedFiles[p] = modTime
+		if hashErr == nil {
+			s.watchedHash[p] = newHash
+		}
+		s.watcherMu.Unlock()
+
+		// If we have both old and new hashes and they match, content didn't change — skip
+		if hadHash && hashErr == nil && oldHash == newHash {
+			continue
+		}
+
+		// Content changed (or we couldn't hash) — notify frontend
+		runtime.EventsEmit(s.ctx, "file-external-change", p, newModStr)
+	}
+}
+
+// WatchFile registers a file path for external modification monitoring.
+// lastModified is informational only; the stored ModTime comes from os.Stat to
+// avoid precision mismatches between RFC3339 parsing and filesystem timestamps.
+func (s *Service) WatchFile(path string, lastModified string) {
+	if path == "" {
+		return
+	}
+	path = filepath.Clean(path)
+
+	// Use the file's own ModTime so poll comparisons are exact
+	info, err := os.Stat(path)
+	var modTime time.Time
+	if err == nil {
+		modTime = info.ModTime()
+	} else {
+		modTime, _ = time.Parse(time.RFC3339, lastModified)
+	}
+
+	hash, _ := fileHash(path)
+
+	s.watcherMu.Lock()
+	s.watchedFiles[path] = modTime
+	if hash != "" {
+		s.watchedHash[path] = hash
+	}
+	if s.watcherDone == nil {
+		s.startFileWatcher()
+	}
+	s.watcherMu.Unlock()
+}
+
+// UnwatchFile removes a file from external modification monitoring.
+func (s *Service) UnwatchFile(path string) {
+	if path == "" {
+		return
+	}
+	path = filepath.Clean(path)
+	s.watcherMu.Lock()
+	delete(s.watchedFiles, path)
+	delete(s.watchedHash, path)
+	s.watcherMu.Unlock()
+}
+
+// StopFileWatcher terminates the background file watcher goroutine.
+func (s *Service) StopFileWatcher() {
+	s.watcherMu.Lock()
+	defer s.watcherMu.Unlock()
+	if s.watcherDone != nil {
+		close(s.watcherDone)
+		s.watcherDone = nil
+	}
 }
 
 func shouldSkipWorkspaceDir(name string) bool {
