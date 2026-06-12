@@ -45,11 +45,13 @@ export function SearchBar({
     (event: React.KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
         return;
       }
       if (event.key === 'Enter') {
         event.preventDefault();
+        event.stopPropagation();
         if (event.shiftKey) {
           onPrev();
         } else {

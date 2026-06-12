@@ -3,6 +3,7 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { mergeAttributes } from '@tiptap/core';
 import type { Mark, MarkType, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorState } from '@tiptap/pm/state';
+import { TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
@@ -469,8 +470,11 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
     const nextIndex = (currentMatchIndex + 1) % searchMatches.length;
     setCurrentMatchIndex(nextIndex);
     const match = searchMatches[nextIndex];
-    editor.chain().focus().setTextSelection({ from: match.from, to: match.to }).run();
-    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: searchMatches, activeIndex: nextIndex }));
+    const tr = editor.state.tr
+      .setSelection(TextSelection.create(editor.state.doc, match.from, match.to))
+      .setMeta(searchPluginKey, { matches: searchMatches, activeIndex: nextIndex });
+    editor.view.dispatch(tr);
+    scrollMatchIntoView(editor, match);
   }, [editor, searchMatches, currentMatchIndex]);
 
   const goToPrevMatch = useCallback(() => {
@@ -478,8 +482,11 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
     const prevIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
     setCurrentMatchIndex(prevIndex);
     const match = searchMatches[prevIndex];
-    editor.chain().focus().setTextSelection({ from: match.from, to: match.to }).run();
-    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: searchMatches, activeIndex: prevIndex }));
+    const tr = editor.state.tr
+      .setSelection(TextSelection.create(editor.state.doc, match.from, match.to))
+      .setMeta(searchPluginKey, { matches: searchMatches, activeIndex: prevIndex });
+    editor.view.dispatch(tr);
+    scrollMatchIntoView(editor, match);
   }, [editor, searchMatches, currentMatchIndex]);
 
   const handleReplace = useCallback(() => {
@@ -718,8 +725,8 @@ export function SourceMarkdownEditor({ markdown, onChange, onOutlineChange, onEd
     const match = searchMatches[nextIndex];
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.focus();
       textarea.setSelectionRange(match.from, match.to);
+      scrollTextareaToSelection(textarea);
     }
   }, [searchMatches, currentMatchIndex]);
 
@@ -730,8 +737,8 @@ export function SourceMarkdownEditor({ markdown, onChange, onOutlineChange, onEd
     const match = searchMatches[prevIndex];
     const textarea = textareaRef.current;
     if (textarea) {
-      textarea.focus();
       textarea.setSelectionRange(match.from, match.to);
+      scrollTextareaToSelection(textarea);
     }
   }, [searchMatches, currentMatchIndex]);
 
@@ -824,6 +831,42 @@ export function SourceMarkdownEditor({ markdown, onChange, onOutlineChange, onEd
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function scrollTextareaToSelection(textarea: HTMLTextAreaElement) {
+  const { selectionStart } = textarea;
+  const value = textarea.value;
+  // Count newlines before the selection start to estimate line number
+  const linesBefore = value.slice(0, selectionStart).split('\n').length - 1;
+  const lineHeight = Number.parseFloat(getComputedStyle(textarea).lineHeight) || 20;
+  const paddingTop = Number.parseFloat(getComputedStyle(textarea).paddingTop) || 0;
+  const targetY = linesBefore * lineHeight + paddingTop;
+  const viewTop = textarea.scrollTop;
+  const viewBottom = viewTop + textarea.clientHeight;
+
+  if (targetY < viewTop) {
+    textarea.scrollTop = Math.max(0, targetY - lineHeight);
+  } else if (targetY + lineHeight > viewBottom) {
+    textarea.scrollTop = targetY - textarea.clientHeight + lineHeight * 2;
+  }
+}
+
+function scrollMatchIntoView(editor: Editor, match: SearchResult) {
+  const { view } = editor;
+  const start = view.coordsAtPos(match.from);
+  const end = view.coordsAtPos(match.to);
+  const scrollParent = view.dom.closest('.document-area') as HTMLElement | null;
+  if (!scrollParent) return;
+  const scrollTop = scrollParent.scrollTop;
+  const scrollBottom = scrollTop + scrollParent.clientHeight;
+  const matchTop = start.top - scrollParent.getBoundingClientRect().top + scrollTop;
+  const matchBottom = end.bottom - scrollParent.getBoundingClientRect().top + scrollTop;
+
+  if (matchTop < scrollTop) {
+    scrollParent.scrollTop = matchTop - 16;
+  } else if (matchBottom > scrollBottom) {
+    scrollParent.scrollTop = matchBottom - scrollParent.clientHeight + 16;
+  }
 }
 
 function extractOutline(editor: Editor): OutlineItem[] {
