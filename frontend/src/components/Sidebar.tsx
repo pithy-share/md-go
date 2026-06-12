@@ -4,6 +4,7 @@ import type { OutlineItem, Workspace, WorkspaceFile } from '../types/app';
 
 interface SidebarProps {
   currentPath: string;
+  openPaths: string[];
   workspace: Workspace | null;
   onOpenWorkspaceFile: (path: string) => void;
 }
@@ -28,7 +29,7 @@ interface WorkspaceFileNode {
   file: WorkspaceFile;
 }
 
-export function Sidebar({ currentPath, workspace, onOpenWorkspaceFile }: SidebarProps) {
+export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile }: SidebarProps) {
   const tree = useMemo(() => buildWorkspaceTree(workspace?.files ?? []), [workspace?.files]);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,6 +82,7 @@ export function Sidebar({ currentPath, workspace, onOpenWorkspaceFile }: Sidebar
           ) : (
             <WorkspaceTree
               currentPath={currentPath}
+              openPaths={openPaths}
               items={displayTree}
               level={0}
               collapsedFolders={isSearching ? new Set() : collapsedFolders}
@@ -126,6 +128,7 @@ export function OutlinePanel({ outline, onJumpToHeading }: OutlinePanelProps) {
 
 function WorkspaceTree({
   currentPath,
+  openPaths,
   items,
   level,
   collapsedFolders,
@@ -133,6 +136,7 @@ function WorkspaceTree({
   onOpenWorkspaceFile,
 }: {
   currentPath: string;
+  openPaths: string[];
   items: WorkspaceTreeItem[];
   level: number;
   collapsedFolders: Set<string>;
@@ -154,6 +158,7 @@ function WorkspaceTree({
               {!collapsed && (
                 <WorkspaceTree
                   currentPath={currentPath}
+                  openPaths={openPaths}
                   items={item.children}
                   level={level + 1}
                   collapsedFolders={collapsedFolders}
@@ -168,7 +173,7 @@ function WorkspaceTree({
         return (
           <button
             key={item.id}
-            className={`tree-item tree-file ${item.file.path === currentPath ? 'active' : ''}`}
+            className={`tree-item tree-file${item.file.path === currentPath ? ' active' : ''}${item.file.path !== currentPath && openPaths.includes(item.file.path) ? ' tab-open' : ''}`}
             style={{ paddingLeft: `${8 + level * 14}px` }}
             title={item.file.path}
             onClick={() => onOpenWorkspaceFile(item.file.path)}

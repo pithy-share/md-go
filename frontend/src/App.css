@@ -1,9 +1,122 @@
 .app-frame {
   display: grid;
-  grid-template-rows: 42px minmax(0, 1fr) 28px;
+  grid-template-rows: 42px 32px minmax(0, 1fr) 28px;
   height: var(--app-height, 100vh);
   background: var(--bg);
   color: var(--text);
+}
+
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  height: 32px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 4px;
+  gap: 2px;
+  min-width: 0;
+  user-select: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  height: 0;
+}
+
+.tab-item {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom-color: var(--border);
+  border-radius: 5px 5px 0 0;
+  cursor: pointer;
+  display: flex;
+  flex: 0 1 180px;
+  font-size: 12px;
+  gap: 6px;
+  height: 30px;
+  min-width: 80px;
+  padding: 0 8px;
+}
+
+.tab-item.active {
+  background: var(--surface);
+  border-color: var(--border);
+  border-bottom-color: var(--surface);
+  color: var(--text);
+  margin-bottom: -1px;
+}
+
+.tab-item:not(.active) {
+  color: var(--muted);
+}
+
+.tab-item:not(.active):hover {
+  background: var(--surface-muted);
+}
+
+.tab-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tab-dirty-dot {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.tab-close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 18px;
+  justify-content: center;
+  opacity: 0;
+  padding: 0;
+  width: 18px;
+}
+
+.tab-item:hover .tab-close,
+.tab-item.active .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.tab-new-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 24px;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+}
+
+.tab-new-btn:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.tree-item.tab-open {
+  color: var(--muted);
 }
 
 .toolbar {

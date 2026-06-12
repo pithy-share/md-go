@@ -61,6 +61,7 @@ export interface ExportPayload {
 }
 
 export interface DocumentState {
+  id: string;
   path: string;
   name: string;
   markdown: string;

@@ -85,6 +85,7 @@ function normalizeRecentType(type: string | undefined): RecentDocument['type'] {
 
 export function createEmptyDocument(): DocumentState {
   return {
+    id: crypto.randomUUID(),
     path: '',
     name: 'Untitled.md',
     markdown: defaultMarkdown,
@@ -96,6 +97,7 @@ export function createEmptyDocument(): DocumentState {
 
 export function documentFromPayload(payload: DocumentPayload): DocumentState {
   return {
+    id: crypto.randomUUID(),
     path: payload.path,
     name: payload.name || 'Untitled.md',
     markdown: payload.content || '',

@@ -33,9 +33,11 @@ import {
 import { models } from '../wailsjs/go/models';
 import { LogPrint, OnFileDrop, OnFileDropOff, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime';
 import { HotkeySettings } from './components/HotkeySettings';
+import { TabBar } from './components/TabBar';
 
 function App() {
-  const [documentState, setDocumentState] = useState<DocumentState>(() => createEmptyDocument());
+  const [tabs, setTabs] = useState<DocumentState[]>([createEmptyDocument()]);
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
@@ -44,6 +46,20 @@ function App() {
   const editorRef = useRef<Editor | null>(null);
   const restoredRecentRef = useRef(false);
   const [message, setMessage] = useState('Ready');
+
+  const activeTab = tabs[activeTabIndex];
+
+  const updateActiveTab = useCallback((updater: (tab: DocumentState) => DocumentState) => {
+    setTabs(prev => {
+      const next = [...prev];
+      next[activeTabIndex] = updater(next[activeTabIndex]);
+      return next;
+    });
+  }, [activeTabIndex]);
+
+  const updateTabById = useCallback((id: string, updater: (tab: DocumentState) => DocumentState) => {
+    setTabs(prev => prev.map(t => t.id === id ? updater(t) : t));
+  }, []);
 
   // ── Hotkey state ──
   const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>([]);
@@ -66,7 +82,7 @@ function App() {
     setFileNavIndex(nextIndex);
   }, []);
 
-  const stats = useMemo(() => calculateStats(documentState.markdown), [documentState.markdown]);
+  const stats = useMemo(() => calculateStats(activeTab.markdown), [activeTab.markdown]);
   const effectiveTheme = resolveTheme(config.theme);
 
   useEffect(() => {
@@ -78,65 +94,34 @@ function App() {
         setConfig(merged);
 
         const latestRecent = merged.recentDocuments[0];
-        const startupWorkspacePath = resolveStartupWorkspacePath(merged);
-        if ((!latestRecent?.path && !startupWorkspacePath) || restoredRecentRef.current) return;
-        restoredRecentRef.current = true;
-
-        let restoredWorkspace: Workspace | null = null;
-        let workspaceUnavailable = false;
-        if (startupWorkspacePath) {
-          try {
-            const nextWorkspace = await ScanFolder(startupWorkspacePath);
-            if (!active) return;
-            if (nextWorkspace?.rootPath) {
-              restoredWorkspace = { ...nextWorkspace, files: nextWorkspace.files ?? [] };
-              setWorkspace(restoredWorkspace);
-              if (!merged.showSidebar) {
-                setConfig((current) => ({ ...current, showSidebar: true }));
-              }
-            }
-          } catch (error) {
-            console.error(error);
-            if (!active) return;
-            workspaceUnavailable = true;
-            setMessage('Recent folder is unavailable');
-          }
-        }
-
-        if (!latestRecent?.path || latestRecent.type === 'folder') {
-          if (restoredWorkspace) {
-            setMessage(`Restored folder ${restoredWorkspace.name || displayNameFromPath(restoredWorkspace.rootPath)}`);
-          }
+        if (!latestRecent?.path) return;
+        if (latestRecent.type === 'folder') {
+          void ScanFolder(latestRecent.path)
+            .then(async (ws) => {
+              if (!active) return;
+              await handleWorkspaceLoaded(ws);
+            })
+            .catch(console.error);
           return;
         }
-
         try {
           const payload = await ReadDocument(latestRecent.path);
-          if (!active) return;
-          if (!payload?.path && !payload?.content) return;
-          setDocumentState(documentFromPayload(payload));
-          if (restoredWorkspace) {
-            setMessage(
-              `Restored ${payload.name || displayNameFromPath(payload.path)} in ${restoredWorkspace.name || displayNameFromPath(restoredWorkspace.rootPath)}`,
-            );
-          } else if (workspaceUnavailable) {
-            setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}; recent folder is unavailable`);
-          } else {
-            setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}`);
-          }
-        } catch (error) {
-          console.error(error);
-          if (!active) return;
-          setMessage('Recent file is unavailable');
+          if (!active || !payload?.path) return;
+          restoredRecentRef.current = true;
+          const restoredTab = documentFromPayload(payload);
+          setTabs([restoredTab]);
+          setActiveTabIndex(0);
+          setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}`);
+        } catch {
+          // File may have been moved or deleted — clear the stale recent entry
+          // so it does not keep blocking restoration on future launches.
+          void persistConfig({ recentDocuments: merged.recentDocuments.filter((_, i) => i !== 0) });
         }
       })
-      .catch((error) => {
-        console.error(error);
-        setMessage('Using default settings');
-      });
-    return () => {
-      active = false;
-    };
+      .catch(console.error);
+
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -147,9 +132,6 @@ function App() {
     try { WindowSetBackgroundColour(bg.r, bg.g, bg.b, 1); } catch { /* Wails runtime may be unavailable in browser dev */ }
   }, [effectiveTheme]);
 
-  // Pin viewport height to a JS-computed CSS variable so layout
-  // never lags behind native window resize — avoids the delayed
-  // "shake" that WebView2's async 100vh recalculation can cause.
   useEffect(() => {
     let frameId = 0;
     const setHeight = () => {
@@ -166,16 +148,6 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const handler = (event: BeforeUnloadEvent) => {
-      if (!documentState.isDirty) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [documentState.isDirty]);
-
   const persistConfig = useCallback(async (updates: Partial<AppConfig>) => {
     setConfig((current) => ({ ...current, ...updates }));
     try {
@@ -189,34 +161,201 @@ function App() {
     }
   }, []);
 
-  const confirmDiscard = useCallback(() => {
-    if (!documentState.isDirty) return true;
-    return window.confirm('Current document has unsaved changes. Continue?');
-  }, [documentState.isDirty]);
+  const saveToPath = useCallback(async (path: string, markdown: string) => {
+    const result = await SaveDocument(path, markdown);
+    return result;
+  }, []);
 
-  const loadDocument = useCallback((payload: DocumentPayload) => {
-    if (!payload?.path && !payload?.content) return;
-    setDocumentState(documentFromPayload(payload));
-    setMessage(`Opened ${payload.name || displayNameFromPath(payload.path)}`);
+  const handleMarkdownChange = useCallback((markdown: string) => {
+    updateActiveTab((current) => {
+      if (current.markdown === markdown) return current;
+      return { ...current, markdown, isDirty: true };
+    });
+  }, [updateActiveTab]);
+
+  const handleSourceReady = useCallback((textarea: HTMLTextAreaElement | null) => {
+    sourceTextareaRef.current = textarea;
   }, []);
 
   const handleNew = useCallback(() => {
-    if (!confirmDiscard()) return;
-    setDocumentState(createEmptyDocument());
+    const newTab = createEmptyDocument();
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabIndex(tabs.length);
     setOutline([]);
     setMessage('New document');
-  }, [confirmDiscard]);
+  }, [tabs.length]);
 
   const handleOpen = useCallback(async () => {
-    if (!confirmDiscard()) return;
     try {
       const payload = await OpenDocument();
-      loadDocument(payload);
+      if (!payload?.path && !payload?.content) return;
+      const existingIndex = tabs.findIndex(t => t.path === payload.path && payload.path !== '');
+      if (existingIndex >= 0) {
+        setActiveTabIndex(existingIndex);
+        setMessage(`Switched to ${payload.name}`);
+        return;
+      }
+      const newTab = documentFromPayload(payload);
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabIndex(tabs.length);
+      setOutline([]);
+      pushFileNav(payload.path);
+      setMessage(`Opened ${payload.name}`);
     } catch (error) {
       console.error(error);
       setMessage('Open failed');
     }
-  }, [confirmDiscard, loadDocument]);
+  }, [tabs, pushFileNav]);
+
+  const handleCloseTab = useCallback((index: number) => {
+    const tab = tabs[index];
+    if (!tab) return;
+
+    if (tab.isDirty) {
+      const discard = window.confirm(`"${tab.name}" has unsaved changes. Discard changes?`);
+      if (!discard) return;
+    }
+
+    if (tabs.length <= 1) {
+      setTabs([createEmptyDocument()]);
+      setActiveTabIndex(0);
+      setOutline([]);
+      return;
+    }
+
+    setTabs(prev => prev.filter((_, i) => i !== index));
+    if (index <= activeTabIndex) {
+      setActiveTabIndex(Math.max(0, index > 0 ? index - 1 : 0));
+    }
+  }, [tabs, activeTabIndex]);
+
+  const handleOpenWorkspaceFile = useCallback(async (path: string, skipHistory = false) => {
+    const existingIndex = tabs.findIndex(t => t.path === path);
+    if (existingIndex >= 0) {
+      setActiveTabIndex(existingIndex);
+      if (!skipHistory) pushFileNav(path);
+      return;
+    }
+
+    const current = tabs[activeTabIndex];
+    if (!current.isDirty && current.path === '' && current.markdown === createEmptyDocument().markdown) {
+      try {
+        const payload = await ReadDocument(path);
+        updateActiveTab(() => documentFromPayload(payload));
+        if (!skipHistory) pushFileNav(path);
+      } catch (error) {
+        console.error(error);
+        setMessage('Workspace file is unavailable');
+      }
+      return;
+    }
+
+    try {
+      const payload = await ReadDocument(path);
+      const newTab = documentFromPayload(payload);
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabIndex(tabs.length);
+      if (!skipHistory) pushFileNav(path);
+    } catch (error) {
+      console.error(error);
+      setMessage('Workspace file is unavailable');
+    }
+  }, [tabs, activeTabIndex, updateActiveTab, pushFileNav]);
+
+  const handleOpenLocalFile = useCallback(async (path: string) => {
+    const existingIndex = tabs.findIndex(t => t.path === path);
+    if (existingIndex >= 0) {
+      setActiveTabIndex(existingIndex);
+      pushFileNav(path);
+      return;
+    }
+
+    const current = tabs[activeTabIndex];
+    if (!current.isDirty && current.path === '' && current.markdown === createEmptyDocument().markdown) {
+      try {
+        const payload = await ReadDocument(path);
+        updateActiveTab(() => documentFromPayload(payload));
+        pushFileNav(path);
+      } catch (error) {
+        console.error(error);
+        setMessage(`Could not open linked file: ${path}`);
+      }
+      return;
+    }
+
+    try {
+      const payload = await ReadDocument(path);
+      const newTab = documentFromPayload(payload);
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabIndex(tabs.length);
+      pushFileNav(path);
+    } catch (error) {
+      console.error(error);
+      setMessage(`Could not open linked file: ${path}`);
+    }
+  }, [tabs, activeTabIndex, updateActiveTab, pushFileNav]);
+
+  const handleOpenWorkspaceFileRef = useRef(handleOpenWorkspaceFile);
+  handleOpenWorkspaceFileRef.current = handleOpenWorkspaceFile;
+
+  const goBack = useCallback(() => {
+    const { history, index } = fileNavRef.current;
+    if (index <= 0) return;
+    const newIndex = index - 1;
+    fileNavRef.current = { ...fileNavRef.current, index: newIndex };
+    setFileNavIndex(newIndex);
+    void handleOpenWorkspaceFileRef.current(history[newIndex], true);
+  }, []);
+
+  const goForward = useCallback(() => {
+    const { history, index } = fileNavRef.current;
+    if (index >= history.length - 1) return;
+    const newIndex = index + 1;
+    fileNavRef.current = { ...fileNavRef.current, index: newIndex };
+    setFileNavIndex(newIndex);
+    void handleOpenWorkspaceFileRef.current(history[newIndex], true);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    try {
+      if (activeTab.path) {
+        const result = await saveToPath(activeTab.path, activeTab.markdown);
+        updateActiveTab((current) => documentAfterSave(current, result));
+        setMessage(`Saved ${result.name}`);
+      } else {
+        const result: SaveResult = await SaveDocumentAs(activeTab.markdown);
+        if (!result?.path) return;
+        updateActiveTab((current) => documentAfterSave(current, result));
+        setMessage(`Saved ${result.name}`);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage('Save failed');
+    }
+  }, [activeTab.markdown, activeTab.path, saveToPath, updateActiveTab]);
+
+  const handleSaveAs = useCallback(async () => {
+    try {
+      const result: SaveResult = await SaveDocumentAs(activeTab.markdown);
+      if (!result?.path) return;
+      updateActiveTab((current) => documentAfterSave(current, result));
+      setMessage(`Saved ${result.name}`);
+    } catch (error) {
+      console.error(error);
+      setMessage('Save as failed');
+    }
+  }, [activeTab.markdown, updateActiveTab]);
+
+  const handleExport = useCallback(async () => {
+    try {
+      const html = markdownToExportHtml(activeTab.markdown, activeTab.name);
+      const result = await ExportHTML({ title: activeTab.name, html });
+      if (result?.path) setMessage(`Exported ${result.name}`);
+    } catch (error) {
+      console.error(error);
+      setMessage('Export failed');
+    }
+  }, [activeTab.markdown, activeTab.name]);
 
   const handleOpenFolder = useCallback(async () => {
     try {
@@ -234,77 +373,88 @@ function App() {
     }
   }, [config, persistConfig]);
 
-  const handleOpenWorkspaceFile = useCallback(async (path: string, skipHistory = false) => {
-    if (!confirmDiscard()) return;
-    try {
-      const payload = await ReadDocument(path);
-      loadDocument(payload);
-      if (!skipHistory) {
-        pushFileNav(path);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage('Workspace file is unavailable');
+  const handleWorkspaceLoaded = useCallback(async (ws: Workspace) => {
+    if (!ws?.rootPath) return;
+    const prevWorkspacePath = (await LoadConfig())?.workspacePath ?? '';
+
+    setWorkspace({ ...ws, files: ws.files ?? [] });
+    setConfig((current) => ({
+      ...current,
+      showSidebar: true,
+      workspacePath: ws.rootPath,
+    }));
+    if (!config.showSidebar) {
+      void persistConfig({ showSidebar: true, workspacePath: ws.rootPath });
+    } else if (ws.rootPath !== prevWorkspacePath) {
+      void persistConfig({ workspacePath: ws.rootPath });
     }
-  }, [confirmDiscard, loadDocument, pushFileNav]);
+    if (!restoredRecentRef.current) setMessage(`Workspace: ${ws.name || displayNameFromPath(ws.rootPath)}`);
+  }, [config, persistConfig]);
 
-  const handleOpenLocalFile = useCallback(async (path: string) => {
-    if (!confirmDiscard()) return;
-    try {
-      const payload = await ReadDocument(path);
-      loadDocument(payload);
-      pushFileNav(path);
-    } catch (error) {
-      console.error(error);
-      setMessage(`Could not open linked file: ${path}`);
-    }
-  }, [confirmDiscard, loadDocument, pushFileNav]);
+  const handleToggleSidebar = useCallback(() => {
+    const next = !config.showSidebar;
+    setConfig((current) => ({ ...current, showSidebar: next }));
+    void persistConfig({ showSidebar: next });
+  }, [config, persistConfig]);
 
-  const goBack = useCallback(() => {
-    const { history, index } = fileNavRef.current;
-    if (index <= 0) return;
-    const newIndex = index - 1;
-    fileNavRef.current = { ...fileNavRef.current, index: newIndex };
-    setFileNavIndex(newIndex);
-    void handleOpenWorkspaceFile(history[newIndex], true);
-  }, [handleOpenWorkspaceFile]);
+  const handleToggleOutline = useCallback(() => {
+    const next = !config.showOutline;
+    setConfig((current) => ({ ...current, showOutline: next }));
+    void persistConfig({ showOutline: next });
+  }, [config, persistConfig]);
 
-  const goForward = useCallback(() => {
-    const { history, index } = fileNavRef.current;
-    if (index >= history.length - 1) return;
-    const newIndex = index + 1;
-    fileNavRef.current = { ...fileNavRef.current, index: newIndex };
-    setFileNavIndex(newIndex);
-    void handleOpenWorkspaceFile(history[newIndex], true);
-  }, [handleOpenWorkspaceFile]);
+  const handleToggleEditorMode = useCallback(() => {
+    const next: EditorMode = config.editorMode === 'rendered' ? 'source' : 'rendered';
+    setConfig((current) => ({ ...current, editorMode: next }));
+    void persistConfig({ editorMode: next });
+  }, [config, persistConfig]);
 
-  const saveToPath = useCallback(async (path: string, markdown: string) => {
-    const result = await SaveDocument(path, markdown);
-    setDocumentState((current) => documentAfterSave(current, result));
-    setMessage(`Saved ${result.name}`);
-    return result;
+  const handleToggleTheme = useCallback(() => {
+    const nextThemePref = nextTheme(config.theme);
+    setConfig((current) => ({ ...current, theme: nextThemePref }));
+    void persistConfig({ theme: nextThemePref });
+  }, [config, persistConfig]);
+
+  const handleAutoSaveChange = useCallback((enabled: boolean) => {
+    setConfig((current) => ({ ...current, autoSave: enabled }));
+    void persistConfig({ autoSave: enabled });
+  }, [persistConfig]);
+
+  const handleToggleHotkeySettings = useCallback(() => {
+    setHotkeySettingsOpen((open) => !open);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    try {
-      await saveToPath(documentState.path, documentState.markdown);
-    } catch (error) {
-      console.error(error);
-      setMessage('Save failed');
-    }
-  }, [documentState.markdown, documentState.path, saveToPath]);
+  const handleHotkeysSaved = useCallback((bindings: HotkeyBinding[]) => {
+    setHotkeys(bindings);
+    setHotkeySettingsOpen(false);
+  }, []);
 
-  const handleSaveAs = useCallback(async () => {
-    try {
-      const result: SaveResult = await SaveDocumentAs(documentState.markdown);
-      if (!result?.path) return;
-      setDocumentState((current) => documentAfterSave(current, result));
-      setMessage(`Saved ${result.name}`);
-    } catch (error) {
-      console.error(error);
-      setMessage('Save as failed');
+  // ── Jump to heading (active tab) ──
+  const handleJumpToHeading = useCallback((pos: number) => {
+    if (config.editorMode === 'source') {
+      const textarea = sourceTextareaRef.current;
+      if (!textarea) return;
+      const lineIndex = textarea.value.slice(0, pos).split(/\r\n|\r|\n/).length - 1;
+      const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 22;
+      textarea.focus();
+      textarea.setSelectionRange(pos, pos);
+      textarea.scrollTop = Math.max(0, lineIndex * lineHeight - textarea.clientHeight * 0.35);
+      return;
     }
-  }, [documentState.markdown]);
+
+    if (!editor) return;
+    editor.chain().focus().setTextSelection(pos + 1).run();
+
+    const editorDocEl = editor.view.dom;
+    const resolvedPos = editor.state.doc.resolve(pos + 1);
+    const coords = editor.view.coordsAtPos(resolvedPos.pos);
+    requestAnimationFrame(() => {
+      editorDocEl.scrollTop = Math.max(
+        0,
+        editorDocEl.scrollTop + coords.top - editorDocEl.getBoundingClientRect().top - editorDocEl.clientHeight * 0.2,
+      );
+    });
+  }, [config.editorMode, editor]);
 
   // ── Load hotkeys from backend ──
   useEffect(() => {
@@ -316,6 +466,9 @@ function App() {
   }, []);
 
   // ── Drag & drop: open .md files dropped onto the window ──
+  const handleOpenLocalFileRef = useRef(handleOpenLocalFile);
+  handleOpenLocalFileRef.current = handleOpenLocalFile;
+
   useEffect(() => {
     LogPrint('DROP: OnFileDrop registered');
 
@@ -327,19 +480,8 @@ function App() {
         LogPrint('DROP: no .md file in drop');
         return;
       }
-      if (!confirmDiscard()) {
-        LogPrint('DROP: discarded due to unsaved changes');
-        return;
-      }
       LogPrint(`DROP: opening ${mdPath}`);
-      ReadDocument(mdPath)
-        .then((payload) => {
-          LogPrint(`DROP: ReadDocument OK name=${payload?.name}`);
-          loadDocument(payload);
-        })
-        .catch((error) => {
-          LogPrint(`DROP: ReadDocument ERROR=${String(error)}`);
-        });
+      void handleOpenLocalFileRef.current(mdPath);
     }, false);
 
     return () => {
@@ -371,6 +513,9 @@ function App() {
       'toggle-sidebar': handleToggleSidebar,
       'toggle-outline': handleToggleOutline,
       'toggle-editor-mode': handleToggleEditorMode,
+      'close-tab': () => handleCloseTab(activeTabIndex),
+      'next-tab': () => setActiveTabIndex(prev => (prev + 1) % tabs.length),
+      'prev-tab': () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length),
       bold: () => editorRef.current?.chain().focus().toggleBold().run(),
       italic: () => editorRef.current?.chain().focus().toggleItalic().run(),
       heading1: () => editorRef.current?.chain().focus().toggleHeading({ level: 1 }).run(),
@@ -405,7 +550,16 @@ function App() {
   // ── Global keydown: match against dynamic hotkey bindings ──
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Skip if the editor already handled this event (its element-level handler fires first in bubble)
+      // Hard-coded Ctrl+Tab / Ctrl+Shift+Tab (hard to capture via hotkey bindings)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Tab' && !event.altKey) {
+        event.preventDefault();
+        setActiveTabIndex(prev => event.shiftKey
+          ? (prev - 1 + tabs.length) % tabs.length
+          : (prev + 1) % tabs.length);
+        return;
+      }
+
+      // Skip if the editor already handled this event
       if (event.defaultPrevented) return;
 
       for (const binding of hotkeys) {
@@ -424,97 +578,35 @@ function App() {
           handler();
           return;
         }
-        // No handler registered — let the browser/editor handle it naturally
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hotkeys]);
+  }, [hotkeys, tabs.length]);
 
   useEffect(() => {
-    if (!config.autoSave || !documentState.isDirty || !documentState.path) return;
+    if (!config.autoSave || !activeTab.isDirty || !activeTab.path) return;
     const timeout = window.setTimeout(() => {
-      void saveToPath(documentState.path, documentState.markdown).catch((error) => {
+      void saveToPath(activeTab.path, activeTab.markdown).then(result => {
+        updateActiveTab(current => documentAfterSave(current, result));
+      }).catch((error) => {
         console.error(error);
         setMessage('Auto save failed');
       });
     }, config.autoSaveDelay);
     return () => window.clearTimeout(timeout);
-  }, [config.autoSave, config.autoSaveDelay, documentState.isDirty, documentState.markdown, documentState.path, saveToPath]);
+  }, [config.autoSave, config.autoSaveDelay, activeTab.isDirty, activeTab.markdown, activeTab.path, saveToPath, updateActiveTab]);
 
-  const handleMarkdownChange = useCallback((markdown: string) => {
-    setDocumentState((current) => {
-      if (current.markdown === markdown) return current;
-      return {
-        ...current,
-        markdown,
-        isDirty: true,
-      };
-    });
-  }, []);
-
-  const handleSourceReady = useCallback((textarea: HTMLTextAreaElement | null) => {
-    sourceTextareaRef.current = textarea;
-  }, []);
-
-  const handleJumpToHeading = useCallback((pos: number) => {
-    if (config.editorMode === 'source') {
-      const textarea = sourceTextareaRef.current;
-      if (!textarea) return;
-      const lineIndex = textarea.value.slice(0, pos).split(/\r\n|\r|\n/).length - 1;
-      const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 22;
-      textarea.focus();
-      textarea.setSelectionRange(pos, pos);
-      textarea.scrollTop = Math.max(0, lineIndex * lineHeight - textarea.clientHeight * 0.35);
-      return;
-    }
-
-    if (!editor) return;
-    editor.chain().focus().setTextSelection(pos + 1).run();
-    editor.view.dom.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [config.editorMode, editor]);
-
-  const handleExport = useCallback(async () => {
-    try {
-      const html = markdownToExportHtml(documentState.markdown, documentState.name);
-      const result = await ExportHTML({ title: documentState.name, html });
-      if (result?.path) setMessage(`Exported ${result.name}`);
-    } catch (error) {
-      console.error(error);
-      setMessage('Export failed');
-    }
-  }, [documentState.markdown, documentState.name]);
-
-  const handleToggleTheme = useCallback(() => {
-    void persistConfig({ theme: nextTheme(config.theme) });
-  }, [config.theme, persistConfig]);
-
-  const handleToggleSidebar = useCallback(() => {
-    void persistConfig({ showSidebar: !config.showSidebar });
-  }, [config.showSidebar, persistConfig]);
-
-  const handleToggleOutline = useCallback(() => {
-    void persistConfig({ showOutline: !config.showOutline });
-  }, [config.showOutline, persistConfig]);
-
-  const handleToggleEditorMode = useCallback(() => {
-    const editorMode: EditorMode = config.editorMode === 'source' ? 'rendered' : 'source';
-    void persistConfig({ editorMode });
-    setMessage(editorMode === 'source' ? 'Source mode' : 'Rendered mode');
-  }, [config.editorMode, persistConfig]);
-
-  const handleAutoSaveChange = useCallback((enabled: boolean) => {
-    void persistConfig({ autoSave: enabled });
-  }, [persistConfig]);
-
-  const handleToggleHotkeySettings = useCallback(() => {
-    setHotkeySettingsOpen((prev) => !prev);
-  }, []);
-
-  const handleHotkeysSaved = useCallback((bindings: HotkeyBinding[]) => {
-    setHotkeys(bindings);
-  }, []);
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (!tabs.some(t => t.isDirty)) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [tabs]);
 
   return (
     <div className="app-frame" style={{ '--wails-drop-target': '1' } as React.CSSProperties}>
@@ -525,7 +617,7 @@ function App() {
         outlineVisible={config.showOutline}
         editorMode={config.editorMode}
         autoSave={config.autoSave}
-        isDirty={documentState.isDirty}
+        isDirty={activeTab.isDirty}
         onNew={handleNew}
         onOpen={handleOpen}
         onOpenFolder={handleOpenFolder}
@@ -539,10 +631,18 @@ function App() {
         onAutoSaveChange={handleAutoSaveChange}
         onToggleHotkeySettings={handleToggleHotkeySettings}
       />
+      <TabBar
+        tabs={tabs}
+        activeTabIndex={activeTabIndex}
+        onSelectTab={setActiveTabIndex}
+        onCloseTab={handleCloseTab}
+        onNewTab={handleNew}
+      />
       <main className="workspace">
         {config.showSidebar && (
           <Sidebar
-            currentPath={documentState.path}
+            currentPath={activeTab.path}
+            openPaths={tabs.map(t => t.path).filter(Boolean)}
             workspace={workspace}
             onOpenWorkspaceFile={handleOpenWorkspaceFile}
           />
@@ -550,8 +650,9 @@ function App() {
         <section className="document-area">
           {config.editorMode === 'source' ? (
             <SourceMarkdownEditor
-              markdown={documentState.markdown}
-              documentPath={documentState.path}
+              key={`source-${activeTab.id}`}
+              markdown={activeTab.markdown}
+              documentPath={activeTab.path}
               onChange={handleMarkdownChange}
               onOutlineChange={setOutline}
               onEditorReady={setEditor}
@@ -559,8 +660,9 @@ function App() {
             />
           ) : (
             <MarkdownEditor
-              markdown={documentState.markdown}
-              documentPath={documentState.path}
+              key={`wysiwyg-${activeTab.id}`}
+              markdown={activeTab.markdown}
+              documentPath={activeTab.path}
               onChange={handleMarkdownChange}
               onOutlineChange={setOutline}
               onEditorReady={setEditor}
@@ -570,7 +672,7 @@ function App() {
         </section>
         {config.showOutline && <OutlinePanel outline={outline} onJumpToHeading={handleJumpToHeading} />}
       </main>
-      <StatusBar path={documentState.path} isDirty={documentState.isDirty} lastSavedAt={documentState.lastSavedAt} stats={stats} />
+      <StatusBar path={activeTab.path} isDirty={activeTab.isDirty} lastSavedAt={activeTab.lastSavedAt} stats={stats} />
       <HotkeySettings isOpen={hotkeySettingsOpen} onClose={handleToggleHotkeySettings} onSaved={handleHotkeysSaved} />
       <div className="toast" role="status" aria-live="polite">{message}</div>
     </div>
