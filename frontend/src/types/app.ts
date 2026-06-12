@@ -66,6 +66,7 @@ export interface DocumentState {
   name: string;
   markdown: string;
   isDirty: boolean;
+  locked: boolean;
   lastSavedAt: string;
   lastModified: string;
 }

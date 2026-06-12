@@ -211,6 +211,11 @@ function App() {
     const tab = tabs[index];
     if (!tab) return;
 
+    if (tab.locked) {
+      setMessage('Tab is locked — unlock it first');
+      return;
+    }
+
     if (tab.isDirty) {
       const discard = window.confirm(`"${tab.name}" has unsaved changes. Discard changes?`);
       if (!discard) return;
@@ -230,40 +235,70 @@ function App() {
   }, [tabs, activeTabIndex]);
 
   const confirmDirtyRange = (indices: number[]) => {
-    const dirty = indices.filter(i => tabs[i]?.isDirty);
+    const dirty = indices.filter(i => {
+      const t = tabs[i];
+      return t?.isDirty && !t?.locked;
+    });
     if (dirty.length === 0) return true;
     return window.confirm(`${dirty.length} tab(s) have unsaved changes. Discard changes?`);
   };
 
   const handleCloseAll = useCallback(() => {
-    const allIndices = tabs.map((_, i) => i);
-    if (!confirmDirtyRange(allIndices)) return;
-    setTabs([createEmptyDocument()]);
-    setActiveTabIndex(0);
+    const closable = tabs.filter(t => !t.locked);
+    if (closable.length === 0) return;
+    if (!confirmDirtyRange(closable.map(t => tabs.indexOf(t)))) return;
+    const activeWasLocked = tabs[activeTabIndex]?.locked;
+    setTabs(prev => prev.filter(t => t.locked));
+    if (!activeWasLocked) {
+      setActiveTabIndex(0);
+    }
     setOutline([]);
-  }, [tabs]);
+  }, [tabs, activeTabIndex]);
 
   const handleCloseRight = useCallback((index: number) => {
-    const rightIndices = tabs.map((_, i) => i).filter(i => i > index);
-    if (rightIndices.length === 0) return;
-    if (!confirmDirtyRange(rightIndices)) return;
-    setTabs(prev => prev.filter((_, i) => i <= index));
-    if (activeTabIndex > index) {
+    const closable = tabs.filter((t, i) => i > index && !t.locked);
+    if (closable.length === 0) return;
+    if (!confirmDirtyRange(closable.map(t => tabs.indexOf(t)))) return;
+    setTabs(prev => prev.filter((t, i) => i <= index || t.locked));
+    if (activeTabIndex > index && !tabs[activeTabIndex]?.locked) {
       setActiveTabIndex(index);
     }
   }, [tabs, activeTabIndex]);
 
   const handleCloseLeft = useCallback((index: number) => {
-    const leftIndices = tabs.map((_, i) => i).filter(i => i < index);
-    if (leftIndices.length === 0) return;
-    if (!confirmDirtyRange(leftIndices)) return;
-    setTabs(prev => prev.filter((_, i) => i >= index));
-    if (activeTabIndex < index) {
+    const closable = tabs.filter((t, i) => i < index && !t.locked);
+    if (closable.length === 0) return;
+    if (!confirmDirtyRange(closable.map(t => tabs.indexOf(t)))) return;
+    setTabs(prev => prev.filter((t, i) => i >= index || t.locked));
+    if (activeTabIndex < index && !tabs[activeTabIndex]?.locked) {
       setActiveTabIndex(0);
-    } else {
-      setActiveTabIndex(activeTabIndex - index);
+    } else if (activeTabIndex >= index) {
+      setActiveTabIndex(activeTabIndex - closable.length);
     }
   }, [tabs, activeTabIndex]);
+
+  const handleToggleLock = useCallback((index: number) => {
+    const tab = tabs[index];
+    if (!tab) return;
+    updateTabById(tab.id, t => ({ ...t, locked: !t.locked }));
+    setMessage(tab.locked ? `Unlocked ${tab.name}` : `Locked ${tab.name}`);
+  }, [tabs, updateTabById]);
+
+  const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
+    setTabs(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    if (fromIndex === activeTabIndex) {
+      setActiveTabIndex(toIndex);
+    } else if (fromIndex < activeTabIndex && toIndex >= activeTabIndex) {
+      setActiveTabIndex(activeTabIndex - 1);
+    } else if (fromIndex > activeTabIndex && toIndex <= activeTabIndex) {
+      setActiveTabIndex(activeTabIndex + 1);
+    }
+  }, [activeTabIndex]);
 
   const handleOpenWorkspaceFile = useCallback(async (path: string, skipHistory = false) => {
     const existingIndex = tabs.findIndex(t => t.path === path);
@@ -676,6 +711,8 @@ function App() {
         onCloseAll={handleCloseAll}
         onCloseRight={handleCloseRight}
         onCloseLeft={handleCloseLeft}
+        onReorder={handleReorder}
+        onToggleLock={handleToggleLock}
       />
       <main className="workspace">
         {config.showSidebar && (

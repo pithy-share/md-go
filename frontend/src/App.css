@@ -56,6 +56,15 @@
   background: var(--surface-muted);
 }
 
+.tab-item.dragging {
+  opacity: 0.4;
+}
+
+.tab-item.drag-over {
+  border-left-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .tab-name {
   flex: 1;
   overflow: hidden;
@@ -91,6 +100,32 @@
 }
 
 .tab-close:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.tab-lock-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 18px;
+  justify-content: center;
+  opacity: 0;
+  padding: 0;
+  width: 18px;
+}
+
+.tab-item:hover .tab-lock-btn,
+.tab-item.active .tab-lock-btn {
+  opacity: 1;
+}
+
+.tab-lock-btn:hover {
   background: var(--surface-muted);
   color: var(--text);
 }

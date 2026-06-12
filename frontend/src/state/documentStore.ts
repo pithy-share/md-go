@@ -90,6 +90,7 @@ export function createEmptyDocument(): DocumentState {
     name: 'Untitled.md',
     markdown: defaultMarkdown,
     isDirty: false,
+    locked: false,
     lastSavedAt: '',
     lastModified: '',
   };
@@ -102,6 +103,7 @@ export function documentFromPayload(payload: DocumentPayload): DocumentState {
     name: payload.name || 'Untitled.md',
     markdown: payload.content || '',
     isDirty: false,
+    locked: false,
     lastSavedAt: '',
     lastModified: payload.lastModified || '',
   };

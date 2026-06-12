@@ -1,4 +1,4 @@
-import { Circle, Plus, X } from 'lucide-react';
+import { Circle, Lock, Plus, X } from 'lucide-react';
 import type { DocumentState } from '../types/app';
 import { useEffect, useRef, useState, useCallback } from 'react';
 
@@ -11,6 +11,8 @@ interface TabBarProps {
   onCloseAll: () => void;
   onCloseRight: (index: number) => void;
   onCloseLeft: (index: number) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
+  onToggleLock: (index: number) => void;
 }
 
 interface ContextMenuState {
@@ -19,9 +21,12 @@ interface ContextMenuState {
   y: number;
 }
 
-export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab, onCloseAll, onCloseRight, onCloseLeft }: TabBarProps) {
+export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab, onCloseAll, onCloseRight, onCloseLeft, onReorder, onToggleLock }: TabBarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -51,6 +56,7 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
   const handleAuxClick = (e: React.MouseEvent, index: number) => {
     if (e.button === 1) {
       e.preventDefault();
+      if (tabs[index]?.locked) return;
       onCloseTab(index);
     }
   };
@@ -59,6 +65,42 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({ index, x: e.clientX, y: e.clientY });
+  };
+
+  // ── Drag & drop reordering ──
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    dragIndexRef.current = index;
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+    const el = e.target as HTMLElement;
+    requestAnimationFrame(() => el.classList.add('tab-dragging'));
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    const from = dragIndexRef.current;
+    if (from === null || from === index) return;
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    const from = dragIndexRef.current;
+    if (from === null || from === toIndex) return;
+    onReorder(from, toIndex);
+  };
+
+  const handleDragEnd = () => {
+    dragIndexRef.current = null;
+    setDragIndex(null);
+    setDragOverIndex(null);
   };
 
   const executeMenuAction = useCallback((action: () => void) => {
@@ -71,25 +113,44 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
       {tabs.map((tab, i) => (
         <div
           key={tab.id}
-          className={`tab-item${i === activeTabIndex ? ' active' : ''}`}
+          draggable
+          className={`tab-item${i === activeTabIndex ? ' active' : ''}${dragOverIndex === i ? ' drag-over' : ''}${dragIndex === i ? ' dragging' : ''}`}
           onClick={() => onSelectTab(i)}
           onAuxClick={(e) => handleAuxClick(e, i)}
           onContextMenu={(e) => handleContextMenu(e, i)}
+          onDragStart={(e) => handleDragStart(e, i)}
+          onDragOver={(e) => handleDragOver(e, i)}
+          onDragLeave={handleDragLeave}
+          onDrop={(e) => handleDrop(e, i)}
+          onDragEnd={handleDragEnd}
           title={tab.path || tab.name}
         >
           <span className="tab-name">{tab.name}</span>
           {tab.isDirty && <Circle size={8} className="tab-dirty-dot" fill="currentColor" />}
-          {tabs.length > 1 && (
+          {tab.locked ? (
             <button
-              className="tab-close"
+              className="tab-lock-btn"
               onClick={(e) => {
                 e.stopPropagation();
-                onCloseTab(i);
+                onToggleLock(i);
               }}
-              title="Close tab"
+              title="已锁定 — 点击解锁"
             >
-              <X size={12} />
+              <Lock size={10} />
             </button>
+          ) : (
+            tabs.length > 1 && (
+              <button
+                className="tab-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCloseTab(i);
+                }}
+                title="Close tab"
+              >
+                <X size={12} />
+              </button>
+            )
           )}
         </div>
       ))}
@@ -104,9 +165,16 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
         >
           <button
             className="tab-context-menu-item"
+            disabled={tabs[contextMenu.index]?.locked}
             onClick={() => executeMenuAction(() => onCloseTab(contextMenu.index))}
           >
             关闭
+          </button>
+          <button
+            className="tab-context-menu-item"
+            onClick={() => executeMenuAction(() => onToggleLock(contextMenu.index))}
+          >
+            {tabs[contextMenu.index]?.locked ? '解锁' : '锁定'}
           </button>
           <button
             className="tab-context-menu-item"
