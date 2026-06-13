@@ -133,6 +133,7 @@ export namespace models {
 	export class ExportPayload {
 	    title: string;
 	    html: string;
+	    sourcePath: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExportPayload(source);
@@ -142,6 +143,7 @@ export namespace models {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.title = source["title"];
 	        this.html = source["html"];
+	        this.sourcePath = source["sourcePath"];
 	    }
 	}
 	export class ExportPdfPayload {

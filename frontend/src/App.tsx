@@ -467,7 +467,7 @@ function App() {
   const handleExport = useCallback(async () => {
     try {
       const html = markdownToExportHtml(activeTab.markdown, activeTab.name, activeTab.path);
-      const result = await ExportHTML({ title: activeTab.name, html });
+      const result = await ExportHTML({ title: activeTab.name, html, sourcePath: activeTab.path });
       if (result?.path) setMessage(`Exported ${result.name}`);
     } catch (error) {
       console.error(error);

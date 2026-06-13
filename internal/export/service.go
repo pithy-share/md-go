@@ -1,16 +1,20 @@
 package export
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"html"
+	"mime"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	xhtml "golang.org/x/net/html"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -64,7 +68,11 @@ func (s *Service) ExportHTML(payload models.ExportPayload) (models.SaveResult, e
 		path += ".html"
 	}
 
-	if err := os.WriteFile(path, []byte(payload.HTML), 0o644); err != nil {
+	htmlContent, err := prepareHTMLForExport(payload.HTML, payload.SourcePath)
+	if err != nil {
+		return models.SaveResult{}, err
+	}
+	if err := os.WriteFile(path, []byte(htmlContent), 0o644); err != nil {
 		return models.SaveResult{}, err
 	}
 
@@ -124,7 +132,10 @@ func (s *Service) ExportPDF(payload models.ExportPdfPayload) (models.SaveResult,
 	tempPDFPath := filepath.Join(tempDir, "export.pdf")
 	profilePath := filepath.Join(tempDir, "profile")
 
-	htmlContent := prepareHTMLForPrint(payload.HTML, payload.SourcePath)
+	htmlContent, err := prepareHTMLForExport(payload.HTML, payload.SourcePath)
+	if err != nil {
+		return models.SaveResult{}, err
+	}
 	if err := os.WriteFile(htmlPath, []byte(htmlContent), 0o644); err != nil {
 		return models.SaveResult{}, err
 	}
@@ -152,34 +163,216 @@ func (s *Service) ExportPDF(payload models.ExportPdfPayload) (models.SaveResult,
 	}, nil
 }
 
-func prepareHTMLForPrint(htmlContent string, sourcePath string) string {
-	sourcePath = strings.TrimSpace(sourcePath)
-	if sourcePath == "" || strings.Contains(strings.ToLower(htmlContent), "<base ") {
-		return htmlContent
+func prepareHTMLForExport(htmlContent string, sourcePath string) (string, error) {
+	document, err := xhtml.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse export HTML: %w", err)
 	}
 
-	baseURL := localDirectoryURL(sourcePath)
-	if baseURL == "" {
-		return htmlContent
-	}
-	baseTag := "\n  <base href=\"" + html.EscapeString(baseURL) + "\">"
+	rewriteExportImages(document, sourcePath)
+	ensureBaseHref(document, localDirectoryURL(sourcePath))
 
-	lowerHTML := strings.ToLower(htmlContent)
-	if headStart := strings.Index(lowerHTML, "<head>"); headStart >= 0 {
-		insertAt := headStart + len("<head>")
-		return htmlContent[:insertAt] + baseTag + htmlContent[insertAt:]
+	var buffer bytes.Buffer
+	if err := xhtml.Render(&buffer, document); err != nil {
+		return "", fmt.Errorf("failed to render export HTML: %w", err)
 	}
-	if headStart := strings.Index(lowerHTML, "<head "); headStart >= 0 {
-		if headEnd := strings.Index(htmlContent[headStart:], ">"); headEnd >= 0 {
-			insertAt := headStart + headEnd + 1
-			return htmlContent[:insertAt] + baseTag + htmlContent[insertAt:]
+	return buffer.String(), nil
+}
+
+func rewriteExportImages(node *xhtml.Node, sourcePath string) {
+	if node == nil {
+		return
+	}
+	if node.Type == xhtml.ElementNode && strings.EqualFold(node.Data, "img") {
+		rewriteExportImage(node, sourcePath)
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		rewriteExportImages(child, sourcePath)
+	}
+}
+
+func rewriteExportImage(node *xhtml.Node, sourcePath string) {
+	currentSource := getNodeAttr(node, "src")
+	originalSource := getNodeAttr(node, "data-markdown-src")
+	imageSource := strings.TrimSpace(originalSource)
+	if imageSource == "" {
+		imageSource = strings.TrimSpace(currentSource)
+	}
+	if imageSource == "" {
+		return
+	}
+
+	if shouldKeepImageSource(imageSource) {
+		removeNodeAttr(node, "data-markdown-src")
+		return
+	}
+
+	imagePath, err := resolveExportImagePath(sourcePath, imageSource)
+	if err != nil {
+		return
+	}
+	dataURL, err := imagePathToDataURL(imagePath)
+	if err != nil {
+		return
+	}
+
+	setNodeAttr(node, "src", dataURL)
+	removeNodeAttr(node, "data-markdown-src")
+}
+
+func shouldKeepImageSource(source string) bool {
+	lowerSource := strings.ToLower(strings.TrimSpace(source))
+	return lowerSource == "" || strings.HasPrefix(lowerSource, "http://") || strings.HasPrefix(lowerSource, "https://") || strings.HasPrefix(lowerSource, "data:") || strings.HasPrefix(lowerSource, "blob:")
+}
+
+func resolveExportImagePath(sourcePath string, source string) (string, error) {
+	source = strings.TrimSpace(source)
+	if source == "" || shouldKeepImageSource(source) {
+		return "", os.ErrNotExist
+	}
+
+	lowerSource := strings.ToLower(source)
+	if strings.HasPrefix(lowerSource, "/local-image?") {
+		parsed, err := url.Parse(source)
+		if err != nil {
+			return "", err
+		}
+		query := parsed.Query()
+		documentPath := query.Get("document")
+		if documentPath == "" {
+			documentPath = sourcePath
+		}
+		return resolveDocumentImagePath(documentPath, query.Get("src"))
+	}
+
+	return resolveDocumentImagePath(sourcePath, source)
+}
+
+func resolveDocumentImagePath(documentPath string, source string) (string, error) {
+	if source == "" || shouldKeepImageSource(source) {
+		return "", os.ErrNotExist
+	}
+
+	decodedSource, err := url.PathUnescape(source)
+	if err != nil {
+		decodedSource = source
+	}
+	decodedSource = strings.TrimPrefix(decodedSource, "file:///")
+	decodedSource = strings.TrimPrefix(decodedSource, "file://")
+	decodedSource = strings.ReplaceAll(decodedSource, "/", string(filepath.Separator))
+
+	var imagePath string
+	if filepath.IsAbs(decodedSource) {
+		imagePath = decodedSource
+	} else {
+		if documentPath == "" {
+			return "", os.ErrNotExist
+		}
+		imagePath = filepath.Join(filepath.Dir(documentPath), decodedSource)
+	}
+
+	imagePath = filepath.Clean(imagePath)
+	if !isSupportedImagePath(imagePath) {
+		return "", os.ErrNotExist
+	}
+
+	info, err := os.Stat(imagePath)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", os.ErrNotExist
+	}
+	return imagePath, nil
+}
+
+func imagePathToDataURL(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
+func isSupportedImagePath(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg":
+		return true
+	default:
+		return false
+	}
+}
+
+func ensureBaseHref(document *xhtml.Node, baseURL string) {
+	if document == nil || strings.TrimSpace(baseURL) == "" {
+		return
+	}
+
+	head := findFirstElement(document, "head")
+	if head == nil || findFirstElement(head, "base") != nil {
+		return
+	}
+
+	head.AppendChild(&xhtml.Node{
+		Type: xhtml.ElementNode,
+		Data: "base",
+		Attr: []xhtml.Attribute{{Key: "href", Val: baseURL}},
+	})
+}
+
+func findFirstElement(node *xhtml.Node, tagName string) *xhtml.Node {
+	if node == nil {
+		return nil
+	}
+	if node.Type == xhtml.ElementNode && strings.EqualFold(node.Data, tagName) {
+		return node
+	}
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		if found := findFirstElement(child, tagName); found != nil {
+			return found
 		}
 	}
+	return nil
+}
 
-	return htmlContent
+func getNodeAttr(node *xhtml.Node, key string) string {
+	for _, attr := range node.Attr {
+		if strings.EqualFold(attr.Key, key) {
+			return attr.Val
+		}
+	}
+	return ""
+}
+
+func setNodeAttr(node *xhtml.Node, key string, value string) {
+	for index, attr := range node.Attr {
+		if strings.EqualFold(attr.Key, key) {
+			node.Attr[index].Val = value
+			return
+		}
+	}
+	node.Attr = append(node.Attr, xhtml.Attribute{Key: key, Val: value})
+}
+
+func removeNodeAttr(node *xhtml.Node, key string) {
+	filtered := node.Attr[:0]
+	for _, attr := range node.Attr {
+		if strings.EqualFold(attr.Key, key) {
+			continue
+		}
+		filtered = append(filtered, attr)
+	}
+	node.Attr = filtered
 }
 
 func localDirectoryURL(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
 	absolute, err := filepath.Abs(path)
 	if err != nil {
 		return ""

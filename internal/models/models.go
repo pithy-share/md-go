@@ -63,8 +63,9 @@ type AppConfig struct {
 
 // ExportPayload carries HTML content generated from the active Markdown document.
 type ExportPayload struct {
-	Title string `json:"title"`
-	HTML  string `json:"html"`
+	Title      string `json:"title"`
+	HTML       string `json:"html"`
+	SourcePath string `json:"sourcePath"`
 }
 
 // ExportPdfPayload carries printable HTML generated from the active Markdown document.
