@@ -87,6 +87,9 @@ export function markdownToExportHtml(markdown: string, title: string): string {
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #d1d5db; padding: 8px 10px; }
     img { max-width: 100%; }
+    h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
+    pre, blockquote, table { page-break-inside: avoid; }
+    tr { page-break-inside: avoid; }
   </style>
 </head>
 <body>

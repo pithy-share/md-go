@@ -55,6 +55,7 @@ interface ToolbarProps {
   onSave: () => void;
   onSaveAs: () => void;
   onExport: () => void;
+  onExportPdf: () => void;
   onToggleSidebar: () => void;
   onToggleOutline: () => void;
   onToggleEditorMode: () => void;
@@ -77,6 +78,7 @@ export function Toolbar({
   onSave,
   onSaveAs,
   onExport,
+  onExportPdf,
   onToggleSidebar,
   onToggleOutline,
   onToggleEditorMode,
@@ -162,6 +164,9 @@ export function Toolbar({
         </button>
         <button className="icon-button" title="Export HTML" onClick={onExport}>
           <Download size={18} />
+        </button>
+        <button className="icon-button" title="Export PDF" onClick={onExportPdf}>
+          <FileText size={18} />
         </button>
       </div>
 

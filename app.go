@@ -89,6 +89,10 @@ func (a *App) ExportHTML(payload models.ExportPayload) (models.SaveResult, error
 	return a.export.ExportHTML(payload)
 }
 
+func (a *App) ExportPDF(payload models.ExportPdfPayload) (models.SaveResult, error) {
+	return a.export.ExportPDF(payload)
+}
+
 // --- Hotkey bindings ---
 
 // LoadHotkeys returns all keyboard shortcut bindings.

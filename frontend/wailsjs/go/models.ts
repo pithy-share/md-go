@@ -144,6 +144,20 @@ export namespace models {
 	        this.html = source["html"];
 	    }
 	}
+	export class ExportPdfPayload {
+	    title: string;
+	    pdf: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportPdfPayload(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.pdf = source["pdf"];
+	    }
+	}
 	
 	
 	export class SaveResult {

@@ -67,6 +67,12 @@ type ExportPayload struct {
 	HTML  string `json:"html"`
 }
 
+// ExportPdfPayload carries base64-encoded PDF data generated from the active Markdown document.
+type ExportPdfPayload struct {
+	Title string `json:"title"`
+	PDF   string `json:"pdf"`
+}
+
 // HotkeyBinding defines a single keyboard shortcut mapped to an action.
 type HotkeyBinding struct {
 	ID        string `json:"id"`
@@ -88,6 +94,7 @@ func DefaultHotkeys() []HotkeyBinding {
 		{ID: "open", Action: "open", Label: "Open File", Key: "o", Ctrl: true, Enabled: true, Category: "file"},
 		{ID: "new", Action: "new", Label: "New Document", Key: "n", Ctrl: true, Enabled: true, Category: "file"},
 		{ID: "export", Action: "export", Label: "Export HTML", Key: "e", Ctrl: true, Shift: true, Enabled: true, Category: "file"},
+		{ID: "export-pdf", Action: "export-pdf", Label: "Export PDF", Key: "p", Ctrl: true, Shift: true, Enabled: true, Category: "file"},
 		{ID: "save-as", Action: "save-as", Label: "Save As", Key: "s", Ctrl: true, Shift: true, Enabled: true, Category: "file"},
 		{ID: "close-tab", Action: "close-tab", Label: "Close Tab", Key: "w", Ctrl: true, Enabled: true, Category: "tab"},
 		{ID: "next-tab", Action: "next-tab", Label: "Next Tab", Key: "Tab", Ctrl: true, Enabled: true, Category: "tab"},

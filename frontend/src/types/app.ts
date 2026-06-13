@@ -60,6 +60,11 @@ export interface ExportPayload {
   html: string;
 }
 
+export interface ExportPdfPayload {
+  title: string;
+  pdf: string;
+}
+
 export interface DocumentState {
   id: string;
   path: string;

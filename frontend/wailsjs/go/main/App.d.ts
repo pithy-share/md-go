@@ -6,6 +6,8 @@ export function DebugLog(arg1:string):Promise<void>;
 
 export function ExportHTML(arg1:models.ExportPayload):Promise<models.SaveResult>;
 
+export function ExportPDF(arg1:models.ExportPdfPayload):Promise<models.SaveResult>;
+
 export function GetRecentDocuments():Promise<Array<models.RecentDocument>>;
 
 export function LoadConfig():Promise<models.AppConfig>;

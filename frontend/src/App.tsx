@@ -6,6 +6,7 @@ import { Sidebar, OutlinePanel } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { MarkdownEditor, SourceMarkdownEditor } from './editor/MarkdownEditor';
 import { markdownToExportHtml } from './editor/markdown';
+import { markdownToPdfBase64 } from './editor/pdfExport';
 import {
   calculateStats,
   createEmptyDocument,
@@ -20,6 +21,7 @@ import {
 import type { AppConfig, DocumentPayload, DocumentState, EditorMode, HotkeyBinding, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
 import {
   ExportHTML,
+  ExportPDF,
   LoadConfig,
   LoadHotkeys,
   OpenDocument,
@@ -474,6 +476,17 @@ function App() {
     }
   }, [activeTab.markdown, activeTab.name]);
 
+  const handleExportPdf = useCallback(async () => {
+    try {
+      const base64 = await markdownToPdfBase64(activeTab.markdown, activeTab.name);
+      const result = await ExportPDF({ title: activeTab.name, pdf: base64 });
+      if (result?.path) setMessage(`Exported PDF ${result.name}`);
+    } catch (error) {
+      console.error(error);
+      setMessage('PDF export failed');
+    }
+  }, [activeTab.markdown, activeTab.name]);
+
   const handleOpenFolder = useCallback(async () => {
     try {
       const nextWorkspace = await OpenFolder();
@@ -627,6 +640,7 @@ function App() {
       new: handleNew,
       open: handleOpen,
       export: handleExport,
+      'export-pdf': handleExportPdf,
       'toggle-sidebar': handleToggleSidebar,
       'toggle-outline': handleToggleOutline,
       'toggle-editor-mode': handleToggleEditorMode,
@@ -790,6 +804,7 @@ function App() {
         onSave={handleSave}
         onSaveAs={handleSaveAs}
         onExport={handleExport}
+        onExportPdf={handleExportPdf}
         onToggleSidebar={handleToggleSidebar}
         onToggleOutline={handleToggleOutline}
         onToggleEditorMode={handleToggleEditorMode}

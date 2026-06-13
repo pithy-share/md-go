@@ -10,6 +10,10 @@ export function ExportHTML(arg1) {
   return window['go']['main']['App']['ExportHTML'](arg1);
 }
 
+export function ExportPDF(arg1) {
+  return window['go']['main']['App']['ExportPDF'](arg1);
+}
+
 export function GetRecentDocuments() {
   return window['go']['main']['App']['GetRecentDocuments']();
 }
