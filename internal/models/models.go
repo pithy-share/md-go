@@ -67,24 +67,25 @@ type ExportPayload struct {
 	HTML  string `json:"html"`
 }
 
-// ExportPdfPayload carries base64-encoded PDF data generated from the active Markdown document.
+// ExportPdfPayload carries printable HTML generated from the active Markdown document.
 type ExportPdfPayload struct {
-	Title string `json:"title"`
-	PDF   string `json:"pdf"`
+	Title      string `json:"title"`
+	HTML       string `json:"html"`
+	SourcePath string `json:"sourcePath"`
 }
 
 // HotkeyBinding defines a single keyboard shortcut mapped to an action.
 type HotkeyBinding struct {
-	ID        string `json:"id"`
-	Action    string `json:"action"`
-	Label     string `json:"label"`
-	Key       string `json:"key"`
-	Ctrl      bool   `json:"ctrl"`
-	Alt       bool   `json:"alt"`
-	Shift     bool   `json:"shift"`
-	Meta      bool   `json:"meta"`
-	Enabled   bool   `json:"enabled"`
-	Category  string `json:"category"`
+	ID       string `json:"id"`
+	Action   string `json:"action"`
+	Label    string `json:"label"`
+	Key      string `json:"key"`
+	Ctrl     bool   `json:"ctrl"`
+	Alt      bool   `json:"alt"`
+	Shift    bool   `json:"shift"`
+	Meta     bool   `json:"meta"`
+	Enabled  bool   `json:"enabled"`
+	Category string `json:"category"`
 }
 
 // DefaultHotkeys returns the factory-default hotkey bindings.

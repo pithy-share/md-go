@@ -6,7 +6,6 @@ import { Sidebar, OutlinePanel } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { MarkdownEditor, SourceMarkdownEditor } from './editor/MarkdownEditor';
 import { markdownToExportHtml } from './editor/markdown';
-import { markdownToPdfBase64 } from './editor/pdfExport';
 import {
   calculateStats,
   createEmptyDocument,
@@ -467,25 +466,25 @@ function App() {
 
   const handleExport = useCallback(async () => {
     try {
-      const html = markdownToExportHtml(activeTab.markdown, activeTab.name);
+      const html = markdownToExportHtml(activeTab.markdown, activeTab.name, activeTab.path);
       const result = await ExportHTML({ title: activeTab.name, html });
       if (result?.path) setMessage(`Exported ${result.name}`);
     } catch (error) {
       console.error(error);
       setMessage('Export failed');
     }
-  }, [activeTab.markdown, activeTab.name]);
+  }, [activeTab.markdown, activeTab.name, activeTab.path]);
 
   const handleExportPdf = useCallback(async () => {
     try {
-      const base64 = await markdownToPdfBase64(activeTab.markdown, activeTab.name);
-      const result = await ExportPDF({ title: activeTab.name, pdf: base64 });
+      const html = markdownToExportHtml(activeTab.markdown, activeTab.name, activeTab.path);
+      const result = await ExportPDF({ title: activeTab.name, html, sourcePath: activeTab.path });
       if (result?.path) setMessage(`Exported PDF ${result.name}`);
     } catch (error) {
       console.error(error);
       setMessage('PDF export failed');
     }
-  }, [activeTab.markdown, activeTab.name]);
+  }, [activeTab.markdown, activeTab.name, activeTab.path]);
 
   const handleOpenFolder = useCallback(async () => {
     try {

@@ -146,7 +146,8 @@ export namespace models {
 	}
 	export class ExportPdfPayload {
 	    title: string;
-	    pdf: string;
+	    html: string;
+	    sourcePath: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExportPdfPayload(source);
@@ -155,7 +156,8 @@ export namespace models {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.title = source["title"];
-	        this.pdf = source["pdf"];
+	        this.html = source["html"];
+	        this.sourcePath = source["sourcePath"];
 	    }
 	}
 	

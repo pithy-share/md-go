@@ -68,8 +68,8 @@ export function htmlToMarkdown(html: string): string {
   return normalizeMarkdown(markdown);
 }
 
-export function markdownToExportHtml(markdown: string, title: string): string {
-  const body = markdownToHtml(markdown);
+export function markdownToExportHtml(markdown: string, title: string, documentPath = ''): string {
+  const body = markdownToHtml(markdown, documentPath);
   const escapedTitle = escapeHtml(title || 'Document');
 
   return `<!doctype html>
@@ -79,17 +79,23 @@ export function markdownToExportHtml(markdown: string, title: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapedTitle}</title>
   <style>
+    html { background: #ffffff; }
     body { color: #1f2937; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.65; margin: 48px auto; max-width: 860px; padding: 0 24px; }
-    pre { background: #111827; border-radius: 6px; color: #f9fafb; overflow: auto; padding: 16px; }
+    pre { background: #111827; border-radius: 6px; color: #f9fafb; overflow: auto; padding: 16px; white-space: pre-wrap; }
     code { background: #f3f4f6; border-radius: 4px; padding: 2px 4px; }
     pre code { background: transparent; padding: 0; }
     blockquote { border-left: 4px solid #d1d5db; color: #4b5563; margin-left: 0; padding-left: 16px; }
     table { border-collapse: collapse; width: 100%; }
     th, td { border: 1px solid #d1d5db; padding: 8px 10px; }
     img { max-width: 100%; }
-    h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }
-    pre, blockquote, table { page-break-inside: avoid; }
-    tr { page-break-inside: avoid; }
+    h1, h2, h3, h4, h5, h6 { break-after: avoid; page-break-after: avoid; }
+    pre, blockquote, table { break-inside: avoid; page-break-inside: avoid; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    @page { size: A4; margin: 14mm; }
+    @media print {
+      body { margin: 0; max-width: none; padding: 0; }
+      a { color: inherit; text-decoration: underline; }
+    }
   </style>
 </head>
 <body>
