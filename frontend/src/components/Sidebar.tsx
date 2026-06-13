@@ -46,7 +46,7 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<SidebarContextMenu | null>(null);
   const [renameItem, setRenameItem] = useState<{ item: WorkspaceTreeItem; currentName: string } | null>(null);
-  const renameInputRef = useRef<HTMLInputElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null!);
 
   useEffect(() => {
     setCollapsedFolders(new Set());
@@ -295,7 +295,7 @@ function WorkspaceTree({
   onOpenWorkspaceFile: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, item: WorkspaceTreeItem) => void;
   renameItem: { item: WorkspaceTreeItem; currentName: string } | null;
-  renameInputRef: React.RefObject<HTMLInputElement | null>;
+  renameInputRef: React.RefObject<HTMLInputElement>;
   onRenameCommit: (item: WorkspaceTreeItem, newName: string) => void;
   onRenameCancel: () => void;
   onRenameStart: (item: WorkspaceTreeItem) => void;

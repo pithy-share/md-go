@@ -164,6 +164,20 @@ export namespace models {
 	}
 	
 	
+	export class SaveImageResult {
+	    path: string;
+	    relativePath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveImageResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.relativePath = source["relativePath"];
+	    }
+	}
 	export class SaveResult {
 	    path: string;
 	    name: string;
