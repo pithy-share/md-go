@@ -748,6 +748,42 @@
   margin: 1em auto;
   max-width: 100%;
 }
+/* ── Image resize wrapper ── */
+.image-resize-wrapper {
+  display: inline-block;
+  position: relative;
+  max-width: 100%;
+  line-height: 1;
+}
+
+.image-resize-wrapper img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+.image-resize-wrapper .resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  border-radius: 3px;
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.image-resize-wrapper:hover .resize-handle,
+.image-resize-wrapper.selected .resize-handle {
+  opacity: 1;
+}
+
 
 .prose-editor .selectedCell::after {
   background: color-mix(in srgb, var(--accent) 16%, transparent);

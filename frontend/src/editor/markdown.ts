@@ -18,18 +18,41 @@ const turndown = new TurndownService({
 
 turndown.use(gfm);
 
-turndown.addRule('imageOriginalSource', {
+turndown.addRule('imageWithDimensions', {
   filter(node) {
-    return node.nodeName === 'IMG' && node instanceof HTMLElement && Boolean(node.dataset.markdownSrc);
+    return node.nodeName === 'IMG' && node instanceof HTMLElement;
   },
   replacement(_content, node) {
-    const element = node as HTMLImageElement;
-    const alt = element.getAttribute('alt') ?? '';
-    const title = element.getAttribute('title');
-    const src = element.dataset.markdownSrc ?? element.getAttribute('src') ?? '';
-    return title ? `![${alt}](${src} "${title}")` : `![${alt}](${src})`;
+    const el = node as HTMLImageElement;
+    const src = el.dataset.markdownSrc || el.getAttribute('src') || '';
+    const alt = el.getAttribute('alt') ?? '';
+    const title = el.getAttribute('title');
+    const width = el.getAttribute('width') || '';
+    const height = el.getAttribute('height') || '';
+
+    if (width || height) {
+      let html = `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"`;
+      if (title) html += ` title="${escapeAttr(title)}"`;
+      if (width) html += ` width="${escapeAttr(width.toString())}"`;
+      if (height) html += ` height="${escapeAttr(height.toString())}"`;
+      html += ' />';
+      return html;
+    }
+
+    const altPart = alt ? alt : '';
+    const titlePart = title ? `"${title}"` : '';
+    return `![${altPart}](${src}${titlePart})`;
   },
 });
+
+// Helper to escape HTML attribute values
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 turndown.addRule('taskListItems', {
   filter(node) {

@@ -89,6 +89,19 @@ type HotkeyBinding struct {
 	Category string `json:"category"`
 }
 
+// SaveImagePayload carries binary image data for storage alongside a document.
+type SaveImagePayload struct {
+	DocumentPath string `json:"documentPath"`
+	ImageData    []byte `json:"imageData"`
+	ImageName    string `json:"imageName"`
+}
+
+// SaveImageResult contains the saved image's path info.
+type SaveImageResult struct {
+	Path         string `json:"path"`
+	RelativePath string `json:"relativePath"`
+}
+
 // DefaultHotkeys returns the factory-default hotkey bindings.
 func DefaultHotkeys() []HotkeyBinding {
 	return []HotkeyBinding{

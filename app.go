@@ -124,3 +124,7 @@ func (a *App) WatchFile(path string, lastModified string) {
 func (a *App) UnwatchFile(path string) {
 	a.files.UnwatchFile(path)
 }
+
+func (a *App) SaveImageFile(documentPath string, imageData []byte, imageName string) (models.SaveImageResult, error) {
+	return a.files.SaveImageFile(documentPath, imageData, imageName)
+}
