@@ -5,6 +5,7 @@ import type { Mark, MarkType, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorState } from '@tiptap/pm/state';
 import { TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
+import { ClipboardPaste, Copy } from 'lucide-react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Image from '@tiptap/extension-image';
@@ -101,6 +102,12 @@ type InlineEditState =
 
 type TableMenuState = {
   target: HTMLElement;
+} | null;
+
+type EditorContextMenuState = {
+  x: number;
+  y: number;
+  canCopy: boolean;
 } | null;
 
 const lowlight = createLowlight(common);
@@ -405,6 +412,7 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
   const [tableMenu, setTableMenu] = useState<TableMenuState>(null);
   const [insertLinkOpen, setInsertLinkOpen] = useState(false);
   const [insertLinkInit, setInsertLinkInit] = useState<{ text: string; href: string }>({ text: '', href: '' });
+  const [editorContextMenu, setEditorContextMenu] = useState<EditorContextMenuState>(null);
 
   // ── Search state ──
   const [searchOpen, setSearchOpen] = useState(false);
@@ -413,6 +421,10 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
   const [showReplace, setShowReplace] = useState(false);
   const [searchMatches, setSearchMatches] = useState<SearchResult[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
+  const closeEditorContextMenu = useCallback(() => {
+    setEditorContextMenu(null);
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -460,7 +472,30 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
       handleDOMEvents: {
         click(view, event) {
           if (!(event instanceof MouseEvent)) return false;
+          closeEditorContextMenu();
           return handleInlineClick(view, event, setInlineEdit, onOpenLocalFile, setTableMenu, documentPath);
+        },
+        contextmenu(view, event) {
+          if (!(event instanceof MouseEvent)) return false;
+          event.preventDefault();
+          event.stopPropagation();
+          setInlineEdit(null);
+          setTableMenu(null);
+
+          if (view.state.selection.empty) {
+            const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+            if (pos) {
+              view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos.pos)));
+            }
+          }
+
+          view.focus();
+          setEditorContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            canCopy: !view.state.selection.empty,
+          });
+          return true;
         },
         copy(view, event) {
           if (!(event instanceof ClipboardEvent)) return false;
@@ -533,6 +568,71 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
     },
     immediatelyRender: false,
   });
+
+  const copySelectionFromContextMenu = useCallback(() => {
+    if (!editor) return;
+
+    editor.chain().focus().run();
+    const { from, to, empty } = editor.state.selection;
+    if (empty) {
+      closeEditorContextMenu();
+      return;
+    }
+
+    try {
+      if (!document.execCommand('copy') && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(editor.state.doc.textBetween(from, to, '\n'));
+      }
+    } catch (error) {
+      console.error('Failed to copy selection:', error);
+      if (navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(editor.state.doc.textBetween(from, to, '\n'));
+      }
+    } finally {
+      closeEditorContextMenu();
+    }
+  }, [closeEditorContextMenu, editor]);
+
+  const pasteTextFromContextMenu = useCallback(async () => {
+    if (!editor) return;
+
+    closeEditorContextMenu();
+    editor.chain().focus().run();
+
+    try {
+      const text = await navigator.clipboard?.readText?.();
+      if (!text) return;
+      editor.view.dispatch(editor.state.tr.insertText(text).scrollIntoView());
+    } catch (error) {
+      console.error('Failed to paste clipboard text:', error);
+    }
+  }, [closeEditorContextMenu, editor]);
+
+  useEffect(() => {
+    if (!editorContextMenu) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeEditorContextMenu();
+    };
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest('.editor-context-menu')) {
+        closeEditorContextMenu();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', closeEditorContextMenu);
+    document.addEventListener('click', handleClick, { capture: true });
+    document.addEventListener('scroll', closeEditorContextMenu, { capture: true });
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', closeEditorContextMenu);
+      document.removeEventListener('click', handleClick, { capture: true });
+      document.removeEventListener('scroll', closeEditorContextMenu, { capture: true });
+    };
+  }, [closeEditorContextMenu, editorContextMenu]);
 
   useEffect(() => {
     onEditorReady(editor ?? null);
@@ -772,6 +872,30 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
         />
       )}
       <EditorContent editor={editor} />
+      {editorContextMenu && (
+        <div
+          className="editor-context-menu"
+          style={{ left: editorContextMenu.x, top: editorContextMenu.y }}
+        >
+          <button
+            className="editor-context-menu-item"
+            disabled={!editorContextMenu.canCopy}
+            onClick={copySelectionFromContextMenu}
+          >
+            <Copy size={14} />
+            复制
+          </button>
+          <button
+            className="editor-context-menu-item"
+            onClick={() => {
+              void pasteTextFromContextMenu();
+            }}
+          >
+            <ClipboardPaste size={14} />
+            粘贴
+          </button>
+        </div>
+      )}
       {inlineEdit?.type === 'code-language' && (
         <InlineCodeLanguage
           target={inlineEdit.target}
