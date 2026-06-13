@@ -106,6 +106,53 @@ function App() {
     setFileNavIndex(nextIndex);
   }, []);
 
+  const handleUnavailableFile = useCallback((path: string) => {
+    if (!path) return;
+
+    const currentTabs = tabsRef.current;
+    const tabIndex = currentTabs.findIndex((tab) => tab.path === path);
+    if (tabIndex === -1) return;
+
+    const tab = currentTabs[tabIndex];
+    void UnwatchFile(path);
+
+    if (tab.isDirty) {
+      setTabs((prev) => prev.map((item) => (
+        item.path === path
+          ? {
+            ...item,
+            path: '',
+            lastModified: '',
+            lastSavedAt: '',
+            isDirty: true,
+          }
+          : item
+      )));
+      setMessage(`File was deleted externally. Kept ${tab.name} as an unsaved tab.`);
+      return;
+    }
+
+    const remaining = currentTabs.filter((item) => item.path !== path);
+    if (remaining.length === 0) {
+      setTabs([createEmptyDocument()]);
+      setActiveTabIndex(0);
+      setOutline([]);
+      setMessage(`Closed missing file ${tab.name}`);
+      return;
+    }
+
+    setTabs(remaining);
+    const currentActiveIdx = activeTabIndexRef.current;
+    if (currentActiveIdx > tabIndex) {
+      setActiveTabIndex(currentActiveIdx - 1);
+    } else if (currentActiveIdx === tabIndex) {
+      setActiveTabIndex(Math.max(0, Math.min(tabIndex, remaining.length - 1)));
+    } else if (currentActiveIdx >= remaining.length) {
+      setActiveTabIndex(Math.max(0, remaining.length - 1));
+    }
+    setMessage(`Closed missing file ${tab.name}`);
+  }, []);
+
   const stats = useMemo(() => calculateStats(activeTab.markdown), [activeTab.markdown]);
   const effectiveTheme = resolveTheme(config.theme);
 
@@ -115,27 +162,29 @@ function App() {
       .then(async (loaded) => {
         if (!active) return;
         const merged = normalizeConfig(loaded);
-        setConfig(merged);
+        let startupConfig = merged;
+        setConfig(startupConfig);
 
-        const startupWorkspacePath = resolveStartupWorkspacePath(merged);
+        const startupWorkspacePath = resolveStartupWorkspacePath(startupConfig);
         if (startupWorkspacePath) {
           try {
             const ws = await ScanFolder(startupWorkspacePath);
             if (!active) return;
             await handleWorkspaceLoaded(ws);
-            await restoreSessionTabs(merged, startupWorkspacePath);
+            await restoreSessionTabs(startupConfig, startupWorkspacePath);
             return;
           } catch (error) {
             console.error(error);
-            if (startupWorkspacePath === merged.workspacePath) {
-              void persistConfig({ workspacePath: '' });
-            }
+            const nextConfig = pruneMissingWorkspaceReference(startupConfig, startupWorkspacePath);
+            startupConfig = nextConfig;
+            setConfig(nextConfig);
+            void persistConfigWith(() => nextConfig);
           }
         }
 
-        if (await restoreSessionTabs(merged, '')) return;
+        if (await restoreSessionTabs(startupConfig, '')) return;
 
-        const latestRecent = merged.recentDocuments[0];
+        const latestRecent = startupConfig.recentDocuments[0];
         if (!latestRecent?.path) return;
         if (latestRecent.type === 'folder') {
           void ScanFolder(latestRecent.path)
@@ -143,7 +192,12 @@ function App() {
               if (!active) return;
               await handleWorkspaceLoaded(ws);
             })
-            .catch(console.error);
+            .catch((error) => {
+              console.error(error);
+              const nextConfig = pruneMissingWorkspaceReference(startupConfig, latestRecent.path);
+              setConfig(nextConfig);
+              void persistConfigWith(() => nextConfig);
+            });
           return;
         }
         try {
@@ -160,7 +214,9 @@ function App() {
         } catch {
           // File may have been moved or deleted — clear the stale recent entry
           // so it does not keep blocking restoration on future launches.
-          void persistConfig({ recentDocuments: merged.recentDocuments.filter((_, i) => i !== 0) });
+          const nextConfig = removeRecentDocument(startupConfig, latestRecent.path, latestRecent.type);
+          setConfig(nextConfig);
+          void persistConfigWith(() => nextConfig);
         }
       })
       .catch(console.error)
@@ -1078,6 +1134,11 @@ function App() {
       if (tabIndex === -1) return;
 
       const tab = currentTabs[tabIndex];
+      if (!newLastModified) {
+        handleUnavailableFile(path);
+        return;
+      }
+
       if (tab.isDirty) {
         const reload = window.confirm(
           `"${tab.name}" has been modified externally.\n\nDo you want to reload it? Your unsaved changes will be lost.`
@@ -1107,6 +1168,10 @@ function App() {
         })
         .catch((error) => {
           console.error(error);
+          if (isMissingPathError(error)) {
+            handleUnavailableFile(path);
+            return;
+          }
           setMessage(`Failed to reload ${path}`);
         });
     });
@@ -1115,7 +1180,7 @@ function App() {
       cancel();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [handleUnavailableFile]);
 
   return (
     <div className="app-frame" style={{ '--wails-drop-target': '1' } as React.CSSProperties}>
@@ -1307,6 +1372,63 @@ function cloneWorkspaceSessionState(state: WorkspaceSessionState): WorkspaceSess
 
 function serializeSessionSnapshot(workspacePath: string, openTabPaths: string[], activeTabPath: string) {
   return JSON.stringify({ workspacePath, openTabPaths, activeTabPath });
+}
+
+function pruneMissingWorkspaceReference(config: AppConfig, missingWorkspacePath: string): AppConfig {
+  const normalizedMissingWorkspacePath = normalizeOptionalPath(missingWorkspacePath);
+  if (!normalizedMissingWorkspacePath) return config;
+
+  const isActiveWorkspace = arePathsEqual(config.workspacePath, normalizedMissingWorkspacePath);
+  const nextWorkspaceStates = Object.fromEntries(
+    Object.entries(config.workspaceStates).filter(([workspacePath]) => !arePathsEqual(workspacePath, normalizedMissingWorkspacePath)),
+  );
+
+  return {
+    ...config,
+    workspacePath: isActiveWorkspace ? '' : config.workspacePath,
+    openTabPaths: isActiveWorkspace ? [] : config.openTabPaths,
+    activeTabPath: isActiveWorkspace ? '' : config.activeTabPath,
+    collapsedFolderPaths: isActiveWorkspace ? [] : config.collapsedFolderPaths,
+    workspaceStates: nextWorkspaceStates,
+    recentDocuments: config.recentDocuments.filter((item) => !(
+      item.type === 'folder' && arePathsEqual(item.path, normalizedMissingWorkspacePath)
+    )),
+  };
+}
+
+function removeRecentDocument(config: AppConfig, path: string, type: RecentDocument['type']): AppConfig {
+  const normalizedPath = normalizeOptionalPath(path);
+  if (!normalizedPath) return config;
+
+  return {
+    ...config,
+    recentDocuments: config.recentDocuments.filter((item) => !(
+      item.type === type && arePathsEqual(item.path, normalizedPath)
+    )),
+  };
+}
+
+function normalizeOptionalPath(path: string) {
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+  return trimTrailingSlashes(trimmed.replace(/\\/g, '/'));
+}
+
+function arePathsEqual(left: string, right: string) {
+  const normalizedLeft = normalizePathForCompare(left);
+  const normalizedRight = normalizePathForCompare(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  return normalizedLeft === normalizedRight;
+}
+
+function isMissingPathError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes('no such file') ||
+    normalizedMessage.includes('not exist') ||
+    normalizedMessage.includes('cannot find the file') ||
+    normalizedMessage.includes('system cannot find') ||
+    normalizedMessage.includes('file does not exist');
 }
 
 export default App;
