@@ -115,6 +115,26 @@ func (a *App) DebugLog(msg string) {
 	a.config.AppendDebugLog(msg)
 }
 
+// CreateWorkspaceFile creates a new Markdown file in the workspace.
+func (a *App) CreateWorkspaceFile(parentDir string, name string) (models.WorkspaceFile, error) {
+	return a.files.CreateWorkspaceFile(parentDir, name)
+}
+
+// CreateWorkspaceFolder creates a new folder in the workspace.
+func (a *App) CreateWorkspaceFolder(parentDir string, name string) (models.WorkspaceFile, error) {
+	return a.files.CreateWorkspaceFolder(parentDir, name)
+}
+
+// DeleteWorkspaceItem removes a file or folder in the workspace.
+func (a *App) DeleteWorkspaceItem(path string, isDir bool) error {
+	return a.files.DeleteWorkspaceItem(path, isDir)
+}
+
+// RenameWorkspaceItem renames a file or folder in the workspace.
+func (a *App) RenameWorkspaceItem(oldPath string, newName string) (models.WorkspaceFile, error) {
+	return a.files.RenameWorkspaceItem(oldPath, newName)
+}
+
 // WatchFile registers a file for external modification monitoring.
 func (a *App) WatchFile(path string, lastModified string) {
 	a.files.WatchFile(path, lastModified)
@@ -123,4 +143,8 @@ func (a *App) WatchFile(path string, lastModified string) {
 // UnwatchFile removes a file from external modification monitoring.
 func (a *App) UnwatchFile(path string) {
 	a.files.UnwatchFile(path)
+}
+
+func (a *App) SaveImageFile(documentPath string, imageData []byte, imageName string) (models.SaveImageResult, error) {
+	return a.files.SaveImageFile(documentPath, imageData, imageName)
 }

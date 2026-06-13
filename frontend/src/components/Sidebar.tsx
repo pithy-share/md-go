@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, ListTree } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, ListTree, Pencil, Trash2 } from 'lucide-react';
 import type { OutlineItem, Workspace, WorkspaceFile } from '../types/app';
 
 interface SidebarProps {
@@ -7,6 +7,11 @@ interface SidebarProps {
   openPaths: string[];
   workspace: Workspace | null;
   onOpenWorkspaceFile: (path: string) => void;
+  onRefreshWorkspace: () => void;
+  onFileDeleted: (path: string) => void;
+  onFileRenamed: (oldPath: string, newPath: string) => void;
+  onCreateFile: (parentDir: string) => void;
+  onCreateFolder: (parentDir: string) => void;
 }
 
 interface OutlinePanelProps {
@@ -29,14 +34,41 @@ interface WorkspaceFileNode {
   file: WorkspaceFile;
 }
 
-export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile }: SidebarProps) {
+interface SidebarContextMenu {
+  x: number;
+  y: number;
+  item: WorkspaceTreeItem;
+}
+
+export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile, onRefreshWorkspace, onFileDeleted, onFileRenamed, onCreateFile, onCreateFolder }: SidebarProps) {
   const tree = useMemo(() => buildWorkspaceTree(workspace?.files ?? []), [workspace?.files]);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [contextMenu, setContextMenu] = useState<SidebarContextMenu | null>(null);
+  const [renameItem, setRenameItem] = useState<{ item: WorkspaceTreeItem; currentName: string } | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setCollapsedFolders(new Set());
   }, [workspace?.rootPath]);
+
+  // Close context menu on outside click / Escape
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    const onClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.sidebar-context-menu')) close();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('click', onClick, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('click', onClick, { capture: true });
+    };
+  }, [contextMenu]);
 
   // ── Search: when query is active, reset collapsed state and filter tree ──
   const isSearching = searchQuery.trim().length > 0;
@@ -55,6 +87,58 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
       }
       return next;
     });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, item: WorkspaceTreeItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, item });
+  };
+
+  const getItemParentDir = (item: WorkspaceTreeItem): string => {
+    if (item.type === 'file') {
+      return item.file.path.substring(0, item.file.path.lastIndexOf(item.file.name) - 1) || workspace?.rootPath || '';
+    }
+    // For folders, derive parent from the id
+    const sepIndex = item.id.lastIndexOf('/');
+    if (sepIndex >= 0) {
+      return (workspace?.rootPath ?? '') + '/' + item.id.substring(0, sepIndex);
+    }
+    return workspace?.rootPath ?? '';
+  };
+
+  const getItemPath = (item: WorkspaceTreeItem): string => {
+    if (item.type === 'file') return item.file.path;
+    return (workspace?.rootPath ?? '') + '/' + item.id;
+  };
+
+  const executeMenuAction = (action: () => void) => {
+    setContextMenu(null);
+    action();
+  };
+
+  const handleRenameCommit = (item: WorkspaceTreeItem, newName: string) => {
+    if (!newName.trim() || newName.trim() === renameItem?.currentName) {
+      setRenameItem(null);
+      return;
+    }
+    const oldPath = getItemPath(item);
+    onFileRenamed(oldPath, newName.trim());
+    setRenameItem(null);
+  };
+
+  const handleRenameStart = (item: WorkspaceTreeItem) => {
+    const name = item.type === 'file' ? item.file.name : item.name;
+    setRenameItem({ item, currentName: name });
+    // Focus after render
+    setTimeout(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }, 0);
+  };
+
+  const handleRenameCancel = () => {
+    setRenameItem(null);
   };
 
   return (
@@ -88,10 +172,71 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
               collapsedFolders={isSearching ? new Set() : collapsedFolders}
               onToggleFolder={toggleFolder}
               onOpenWorkspaceFile={onOpenWorkspaceFile}
+              onContextMenu={handleContextMenu}
+              renameItem={renameItem}
+              renameInputRef={renameInputRef}
+              onRenameCommit={handleRenameCommit}
+              onRenameCancel={handleRenameCancel}
+              onRenameStart={handleRenameStart}
             />
           )}
         </div>
       </section>
+
+      {contextMenu && (
+        <div
+          className="sidebar-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {contextMenu.item.type === 'folder' && (
+            <>
+              <button
+                className="sidebar-context-menu-item"
+                onClick={() => executeMenuAction(() => {
+                  const parentDir = getItemPath(contextMenu.item);
+                  onCreateFile(parentDir);
+                })}
+              >
+                <FilePlus size={14} />
+                新建文件
+              </button>
+              <button
+                className="sidebar-context-menu-item"
+                onClick={() => executeMenuAction(() => {
+                  const parentDir = getItemPath(contextMenu.item);
+                  onCreateFolder(parentDir);
+                })}
+              >
+                <FolderPlus size={14} />
+                新建文件夹
+              </button>
+            </>
+          )}
+          <button
+            className="sidebar-context-menu-item"
+            onClick={() => executeMenuAction(() => handleRenameStart(contextMenu.item))}
+          >
+            <Pencil size={14} />
+            重命名
+          </button>
+          <button
+            className="sidebar-context-menu-item danger"
+            onClick={() => {
+              setContextMenu(null);
+              const item = contextMenu.item;
+              const itemName = item.type === 'file' ? item.file.name : item.name;
+              if (window.confirm(`确定要删除 "${itemName}" 吗？此操作不可撤销。`)) {
+                const path = getItemPath(item);
+                const isDir = item.type === 'folder';
+                onFileDeleted(path + (isDir ? '|dir|' : ''));
+              }
+            }}
+          >
+            <Trash2 size={14} />
+            删除
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
@@ -134,6 +279,12 @@ function WorkspaceTree({
   collapsedFolders,
   onToggleFolder,
   onOpenWorkspaceFile,
+  onContextMenu,
+  renameItem,
+  renameInputRef,
+  onRenameCommit,
+  onRenameCancel,
+  onRenameStart,
 }: {
   currentPath: string;
   openPaths: string[];
@@ -142,18 +293,52 @@ function WorkspaceTree({
   collapsedFolders: Set<string>;
   onToggleFolder: (id: string) => void;
   onOpenWorkspaceFile: (path: string) => void;
+  onContextMenu: (e: React.MouseEvent, item: WorkspaceTreeItem) => void;
+  renameItem: { item: WorkspaceTreeItem; currentName: string } | null;
+  renameInputRef: React.RefObject<HTMLInputElement | null>;
+  onRenameCommit: (item: WorkspaceTreeItem, newName: string) => void;
+  onRenameCancel: () => void;
+  onRenameStart: (item: WorkspaceTreeItem) => void;
 }) {
   return (
     <>
       {items.map((item) => {
         if (item.type === 'folder') {
           const collapsed = collapsedFolders.has(item.id);
+          const isRenaming = renameItem?.item === item;
           return (
             <div key={item.id} className="tree-branch">
-              <button className="tree-item tree-folder" style={{ paddingLeft: `${8 + level * 14}px` }} onClick={() => onToggleFolder(item.id)}>
+              <button
+                className={`tree-item tree-folder${isRenaming ? ' inline-editing' : ''}`}
+                style={{ paddingLeft: `${8 + level * 14}px` }}
+                onClick={() => !isRenaming && onToggleFolder(item.id)}
+                onContextMenu={(e) => {
+                  if (!isRenaming) onContextMenu(e, item);
+                }}
+              >
                 {collapsed ? <ChevronRight className="tree-toggle" size={14} /> : <ChevronDown className="tree-toggle" size={14} />}
                 {collapsed ? <Folder size={15} /> : <FolderOpen size={15} />}
-                <span>{item.name}</span>
+                {isRenaming ? (
+                  <input
+                    ref={renameInputRef}
+                    className="tree-inline-rename-input"
+                    defaultValue={item.name}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        onRenameCommit(item, e.currentTarget.value);
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        onRenameCancel();
+                      }
+                    }}
+                    onBlur={() => onRenameCancel()}
+                    onClick={(e) => e.stopPropagation()}
+                    onContextMenu={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span>{item.name}</span>
+                )}
               </button>
               {!collapsed && (
                 <WorkspaceTree
@@ -164,23 +349,55 @@ function WorkspaceTree({
                   collapsedFolders={collapsedFolders}
                   onToggleFolder={onToggleFolder}
                   onOpenWorkspaceFile={onOpenWorkspaceFile}
+                  onContextMenu={onContextMenu}
+                  renameItem={renameItem}
+                  renameInputRef={renameInputRef}
+                  onRenameCommit={onRenameCommit}
+                  onRenameCancel={onRenameCancel}
+                  onRenameStart={onRenameStart}
                 />
               )}
             </div>
           );
         }
 
+        const isRenaming = renameItem?.item === item;
         return (
           <button
             key={item.id}
-            className={`tree-item tree-file${item.file.path === currentPath ? ' active' : ''}${item.file.path !== currentPath && openPaths.includes(item.file.path) ? ' tab-open' : ''}`}
+            className={`tree-item tree-file${item.file.path === currentPath ? ' active' : ''}${item.file.path !== currentPath && openPaths.includes(item.file.path) ? ' tab-open' : ''}${isRenaming ? ' inline-editing' : ''}`}
             style={{ paddingLeft: `${8 + level * 14}px` }}
             title={item.file.path}
-            onClick={() => onOpenWorkspaceFile(item.file.path)}
+            onClick={() => !isRenaming && onOpenWorkspaceFile(item.file.path)}
+            onContextMenu={(e) => {
+              if (!isRenaming) onContextMenu(e, item);
+            }}
           >
             <span className="tree-spacer" />
             <FileText size={15} />
-            <span>{item.file.name}</span>
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                className="tree-inline-rename-input"
+                defaultValue={item.file.name}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRenameCommit(item, e.currentTarget.value);
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRenameCancel();
+                  }
+                }}
+                onBlur={() => onRenameCancel()}
+                onClick={(e) => e.stopPropagation()}
+                onContextMenu={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span>{item.file.name}</span>
+            )}
           </button>
         );
       })}

@@ -19,6 +19,7 @@ import TaskList from '@tiptap/extension-task-list';
 import Typography from '@tiptap/extension-typography';
 import { common, createLowlight } from 'lowlight';
 import { htmlToMarkdown, markdownToHtml } from './markdown';
+import { SaveImageFile } from '../../wailsjs/go/main/App';
 import { languageLabel } from './languages';
 import { InlineCodeLanguage } from './InlineCodeLanguage';
 import { InlineLinkEditor } from './InlineLinkEditor';
@@ -27,6 +28,46 @@ import { InsertLinkPopover } from './InsertLinkPopover';
 import { SearchBar } from './SearchBar';
 import { createSearchPlugin, findMatches, findMatchesInDoc, searchPluginKey, type SearchResult } from './searchPlugin';
 import type { OutlineItem } from '../types/app';
+
+async function handleImageInsert(
+  file: File,
+  view: EditorView,
+  documentPath: string,
+): Promise<void> {
+  const buffer = await file.arrayBuffer();
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const imageName = `paste-${timestamp}.${ext}`;
+
+  let relativePath: string;
+  if (documentPath) {
+    try {
+      const result = await SaveImageFile(documentPath, Array.from(new Uint8Array(buffer)), imageName);
+      relativePath = result.relativePath || result.path;
+    } catch (error) {
+      console.error('Failed to save image file:', error);
+      const mimeType = file.type || 'image/png';
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      relativePath = `data:${mimeType};base64,${btoa(binary)}`;
+    }
+  } else {
+    const mimeType = file.type || 'image/png';
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    relativePath = `data:${mimeType};base64,${btoa(binary)}`;
+  }
+
+  const { state, dispatch } = view;
+  const node = state.schema.nodes.image.create({ src: relativePath });
+  dispatch(state.tr.replaceSelectionWith(node));
+}
 
 interface MarkdownEditorProps {
   markdown: string;
@@ -127,13 +168,122 @@ const MarkdownImage = Image.extend({
           return { 'data-markdown-src': attributes.dataMarkdownSrc };
         },
       },
+      width: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('width') || element.style.width || null,
+        renderHTML: (attributes: { width?: string | null }) => {
+          if (!attributes.width) return {};
+          return { width: attributes.width };
+        },
+      },
+      height: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute('height') || element.style.height || null,
+        renderHTML: (attributes: { height?: string | null }) => {
+          if (!attributes.height) return {};
+          return { height: attributes.height };
+        },
+      },
     };
   },
 
   renderHTML({ HTMLAttributes }) {
     return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)];
   },
+
+  addNodeView() {
+    return ({ node, getPos, editor }) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'image-resize-wrapper';
+      wrapper.contentEditable = 'false';
+
+      const img = document.createElement('img');
+      img.src = node.attrs.src;
+      img.draggable = true;
+      if (node.attrs.width) {
+        img.setAttribute('width', node.attrs.width);
+        img.style.width = node.attrs.width;
+      }
+      if (node.attrs.height) {
+        img.setAttribute('height', node.attrs.height);
+        img.style.height = node.attrs.height;
+      }
+
+      wrapper.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pos = getPos();
+        if (typeof pos === 'number') {
+          editor.commands.command(({ tr }) => {
+            tr.setSelection(TextSelection.create(tr.doc, pos));
+            return true;
+          });
+        }
+      });
+
+      const handle = document.createElement('div');
+      handle.className = 'resize-handle';
+      handle.setAttribute('aria-label', 'Resize image');
+
+      let startX = 0;
+      let startWidth = 0;
+      let resizing = false;
+
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startX = e.clientX;
+        startWidth = img.offsetWidth;
+        resizing = true;
+        wrapper.classList.add('selected');
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+          if (!resizing) return;
+          const newWidth = Math.max(40, startWidth + (moveEvent.clientX - startX));
+          img.style.width = `${newWidth}px`;
+        };
+
+        const onMouseUp = () => {
+          if (!resizing) return;
+          resizing = false;
+          wrapper.classList.remove('selected');
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          const pos = getPos();
+          if (typeof pos === 'number') {
+            editor.commands.command(({ tr }) => {
+              tr.setNodeAttribute(pos, 'width', img.style.width || null);
+              return true;
+            });
+          }
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(handle);
+
+      return {
+        dom: wrapper,
+        update(updatedNode) {
+          if (updatedNode.type.name !== 'image') return false;
+          const newSrc = updatedNode.attrs.src;
+          if (img.getAttribute('src') !== newSrc) {
+            img.setAttribute('src', newSrc);
+          }
+          const newWidth = updatedNode.attrs.width;
+          if (newWidth) {
+            img.style.width = typeof newWidth === 'string' ? newWidth : '';
+          }
+          return true;
+        },
+      };
+    };
+  },
 });
+
+
 
 function cleanLocalPath(href: string): string {
   // Strip file:// protocol, query params, and hash fragments
@@ -315,6 +465,53 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
         copy(view, event) {
           if (!(event instanceof ClipboardEvent)) return false;
           return copyLinkSelection(event, view.state);
+        },
+        paste(view, event) {
+          if (!(event instanceof ClipboardEvent)) return false;
+          const items = event.clipboardData?.items;
+          if (!items || items.length === 0) return false;
+
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.startsWith('image/')) {
+              event.preventDefault();
+              const blob = item.getAsFile();
+              if (!blob) continue;
+              void handleImageInsert(blob, view, documentPath);
+              return true;
+            }
+          }
+          return false;
+        },
+        drop(view, event) {
+          if (!(event instanceof DragEvent)) return false;
+          const files = event.dataTransfer?.files;
+          if (!files || files.length === 0) return false;
+
+          let hasImage = false;
+          for (let i = 0; i < files.length; i++) {
+            if (files[i].type.startsWith('image/')) {
+              hasImage = true;
+              break;
+            }
+          }
+          if (!hasImage) return false;
+
+          event.preventDefault();
+
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (pos) {
+            const tr = view.state.tr;
+            tr.setSelection(TextSelection.create(view.state.doc, pos.pos));
+            view.dispatch(tr);
+          }
+
+          for (let i = 0; i < files.length; i++) {
+            if (files[i].type.startsWith('image/')) {
+              void handleImageInsert(files[i], view, documentPath);
+            }
+          }
+          return true;
         },
       },
     },

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -440,4 +441,226 @@ func ensureMarkdownExtension(path string) string {
 	default:
 		return path + ".md"
 	}
+}
+
+// CreateWorkspaceFile creates a new empty Markdown file under parentDir.
+func (s *Service) CreateWorkspaceFile(parentDir, name string) (models.WorkspaceFile, error) {
+	if strings.TrimSpace(parentDir) == "" {
+		return models.WorkspaceFile{}, errors.New("parent directory is required")
+	}
+	if strings.TrimSpace(name) == "" {
+		return models.WorkspaceFile{}, errors.New("file name is required")
+	}
+	if strings.ContainsAny(name, "/\\<>:\"|?*") {
+		return models.WorkspaceFile{}, errors.New("file name contains invalid characters")
+	}
+
+	parentDir = filepath.Clean(parentDir)
+	name = ensureMarkdownExtension(name)
+
+	targetPath := filepath.Join(parentDir, name)
+	targetPath = filepath.Clean(targetPath)
+
+	// Check for name conflict
+	if _, err := os.Stat(targetPath); err == nil {
+		return models.WorkspaceFile{}, fmt.Errorf("a file or folder named %q already exists", name)
+	}
+
+	f, err := os.Create(targetPath)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
+	defer f.Close()
+
+	content := "# " + strings.TrimSuffix(name, filepath.Ext(name)) + "\n\n"
+	if _, err := f.WriteString(content); err != nil {
+		return models.WorkspaceFile{}, err
+	}
+
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
+
+	if s.config != nil {
+		_ = s.config.TouchRecentDocument(targetPath)
+	}
+
+	return models.WorkspaceFile{
+		Path:       targetPath,
+		Name:       filepath.Base(targetPath),
+		Size:       info.Size(),
+		ModifiedAt: info.ModTime().Format(time.RFC3339),
+	}, nil
+}
+
+// CreateWorkspaceFolder creates a new directory under parentDir.
+func (s *Service) CreateWorkspaceFolder(parentDir, name string) (models.WorkspaceFile, error) {
+	if strings.TrimSpace(parentDir) == "" {
+		return models.WorkspaceFile{}, errors.New("parent directory is required")
+	}
+	if strings.TrimSpace(name) == "" {
+		return models.WorkspaceFile{}, errors.New("folder name is required")
+	}
+	if strings.ContainsAny(name, "/\\<>:\"|?*") {
+		return models.WorkspaceFile{}, errors.New("folder name contains invalid characters")
+	}
+
+	parentDir = filepath.Clean(parentDir)
+	targetPath := filepath.Join(parentDir, name)
+	targetPath = filepath.Clean(targetPath)
+
+	// Check for name conflict
+	if _, err := os.Stat(targetPath); err == nil {
+		return models.WorkspaceFile{}, fmt.Errorf("a file or folder named %q already exists", name)
+	}
+
+	if err := os.Mkdir(targetPath, 0o755); err != nil {
+		return models.WorkspaceFile{}, err
+	}
+
+	return models.WorkspaceFile{
+		Path: targetPath,
+		Name: filepath.Base(targetPath),
+	}, nil
+}
+
+// DeleteWorkspaceItem removes a file or directory at the given path.
+func (s *Service) DeleteWorkspaceItem(path string, isDir bool) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("path is required")
+	}
+
+	path = filepath.Clean(path)
+
+	if isDir {
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+	} else {
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// RenameWorkspaceItem renames a file or directory.
+func (s *Service) RenameWorkspaceItem(oldPath, newName string) (models.WorkspaceFile, error) {
+	if strings.TrimSpace(oldPath) == "" {
+		return models.WorkspaceFile{}, errors.New("path is required")
+	}
+	if strings.TrimSpace(newName) == "" {
+		return models.WorkspaceFile{}, errors.New("new name is required")
+	}
+	if strings.ContainsAny(newName, "/\\<>:\"|?*") {
+		return models.WorkspaceFile{}, errors.New("new name contains invalid characters")
+	}
+
+	oldPath = filepath.Clean(oldPath)
+	parentDir := filepath.Dir(oldPath)
+	newPath := filepath.Join(parentDir, newName)
+	newPath = filepath.Clean(newPath)
+
+	// Check for name conflict when target differs from source
+	if oldPath != newPath {
+		if _, err := os.Stat(newPath); err == nil {
+			return models.WorkspaceFile{}, fmt.Errorf("a file or folder named %q already exists", newName)
+		}
+	}
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return models.WorkspaceFile{}, err
+	}
+
+	info, err := os.Stat(newPath)
+	if err != nil {
+		return models.WorkspaceFile{Path: newPath, Name: filepath.Base(newPath)}, nil
+	}
+
+	return models.WorkspaceFile{
+		Path:       newPath,
+		Name:       filepath.Base(newPath),
+		Size:       info.Size(),
+		ModifiedAt: info.ModTime().Format(time.RFC3339),
+	}, nil
+}
+
+// SaveImageFile saves raw image bytes to an assets/ directory next to the document.
+// If documentPath is empty, the image is saved alongside a temp location and the
+// absolute path is returned.  Callers should fall back to Base64 data URLs in that case.
+// The target directory is created automatically.  Name collisions are resolved by
+// appending "-1", "-2", etc. before the extension.
+func (s *Service) SaveImageFile(documentPath string, imageData []byte, imageName string) (models.SaveImageResult, error) {
+	if len(imageData) == 0 {
+		return models.SaveImageResult{}, errors.New("image data is empty")
+	}
+	imageName = sanitizeImageName(imageName)
+	if imageName == "" {
+		return models.SaveImageResult{}, errors.New("invalid image name")
+	}
+
+	var dir string
+	if documentPath != "" {
+		dir = filepath.Join(filepath.Dir(filepath.Clean(documentPath)), "assets")
+	} else {
+		dir = filepath.Join(os.TempDir(), "md-go-images")
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return models.SaveImageResult{}, err
+	}
+
+	targetPath := filepath.Join(dir, imageName)
+	targetPath = resolveNameCollision(targetPath)
+
+	if err := os.WriteFile(targetPath, imageData, 0o644); err != nil {
+		return models.SaveImageResult{}, err
+	}
+
+	var relativePath string
+	if documentPath != "" {
+		docDir := filepath.Dir(filepath.Clean(documentPath))
+		rel, err := filepath.Rel(docDir, targetPath)
+		if err != nil {
+			relativePath = imageName
+		} else {
+			relativePath = filepath.ToSlash(rel)
+		}
+	}
+
+	return models.SaveImageResult{
+		Path:         targetPath,
+		RelativePath: relativePath,
+	}, nil
+}
+
+func sanitizeImageName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
+			return r
+		}
+		return '_'
+	}, name)
+	ext := strings.ToLower(filepath.Ext(name))
+	if ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".gif" && ext != ".webp" && ext != ".bmp" && ext != ".svg" {
+		name += ".png"
+	}
+	return name
+}
+
+func resolveNameCollision(path string) string {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return path
+	}
+	ext := filepath.Ext(path)
+	base := path[:len(path)-len(ext)]
+	for i := 1; i < 1000; i++ {
+		candidate := base + "-" + strconv.Itoa(i) + ext
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+	return path
 }
