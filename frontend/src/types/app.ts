@@ -44,6 +44,12 @@ export interface Workspace {
   files: WorkspaceFile[];
 }
 
+export interface WorkspaceSessionState {
+  openTabPaths: string[];
+  activeTabPath: string;
+  collapsedFolderPaths: string[];
+}
+
 export interface AppConfig {
   theme: ThemePreference;
   autoSave: boolean;
@@ -52,6 +58,10 @@ export interface AppConfig {
   showOutline: boolean;
   editorMode: EditorMode;
   workspacePath: string;
+  openTabPaths: string[];
+  activeTabPath: string;
+  collapsedFolderPaths: string[];
+  workspaceStates: Record<string, WorkspaceSessionState>;
   recentDocuments: RecentDocument[];
 }
 

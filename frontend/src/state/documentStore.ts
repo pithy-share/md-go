@@ -1,4 +1,4 @@
-import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, EditorMode, RecentDocument, SaveResult, ThemePreference } from '../types/app';
+import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, EditorMode, RecentDocument, SaveResult, ThemePreference, WorkspaceSessionState } from '../types/app';
 
 export const defaultMarkdown = `# Untitled
 
@@ -13,10 +13,15 @@ export const defaultConfig: AppConfig = {
   showOutline: true,
   editorMode: 'rendered',
   workspacePath: '',
+  openTabPaths: [],
+  activeTabPath: '',
+  collapsedFolderPaths: [],
+  workspaceStates: {},
   recentDocuments: [],
 };
 
 type RecentDocumentInput = Omit<Partial<RecentDocument>, 'type'> & { type?: string };
+type WorkspaceSessionStateInput = Partial<WorkspaceSessionState> | null | undefined;
 
 type ConfigInput = Omit<Partial<AppConfig>, 'theme' | 'editorMode' | 'recentDocuments'> & {
   theme?: string;
@@ -30,6 +35,12 @@ export function normalizeConfig(input: ConfigInput | null | undefined): AppConfi
   const showOutline = typeof input?.showOutline === 'boolean' ? input.showOutline : defaultConfig.showOutline;
   const editorMode = normalizeEditorMode(input?.editorMode);
   const workspacePath = typeof input?.workspacePath === 'string' ? input.workspacePath.trim() : defaultConfig.workspacePath;
+  const openTabPaths = normalizeOpenTabPaths((input as Partial<AppConfig> | undefined)?.openTabPaths);
+  const activeTabPath = typeof (input as Partial<AppConfig> | undefined)?.activeTabPath === 'string'
+    ? (input as Partial<AppConfig>).activeTabPath!.trim()
+    : defaultConfig.activeTabPath;
+  const collapsedFolderPaths = normalizeCollapsedFolderPaths((input as Partial<AppConfig> | undefined)?.collapsedFolderPaths);
+  const workspaceStates = normalizeWorkspaceStates((input as Partial<AppConfig> | undefined)?.workspaceStates);
 
   return {
     ...defaultConfig,
@@ -39,6 +50,10 @@ export function normalizeConfig(input: ConfigInput | null | undefined): AppConfi
     showOutline,
     editorMode,
     workspacePath,
+    openTabPaths,
+    activeTabPath,
+    collapsedFolderPaths,
+    workspaceStates,
     recentDocuments,
   };
 }
@@ -77,6 +92,66 @@ function normalizeRecentDocuments(items: RecentDocumentInput[] | undefined): Rec
   }
 
   return recentDocuments;
+}
+
+function normalizeOpenTabPaths(items: string[] | undefined): string[] {
+  if (!Array.isArray(items)) return [];
+
+  const seen = new Set<string>();
+  const openTabPaths: string[] = [];
+
+  for (const item of items) {
+    const path = typeof item === 'string' ? item.trim() : '';
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    openTabPaths.push(path);
+  }
+
+  return openTabPaths;
+}
+
+function normalizeCollapsedFolderPaths(items: string[] | undefined): string[] {
+  if (!Array.isArray(items)) return [];
+
+  const seen = new Set<string>();
+  const collapsedFolderPaths: string[] = [];
+
+  for (const item of items) {
+    const path = typeof item === 'string' ? normalizeFolderId(item) : '';
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    collapsedFolderPaths.push(path);
+  }
+
+  return collapsedFolderPaths;
+}
+
+function normalizeWorkspaceSessionState(input: WorkspaceSessionStateInput): WorkspaceSessionState {
+  const openTabPaths = normalizeOpenTabPaths(input?.openTabPaths);
+  const activeTabPath = typeof input?.activeTabPath === 'string' ? input.activeTabPath.trim() : '';
+  const collapsedFolderPaths = normalizeCollapsedFolderPaths(input?.collapsedFolderPaths);
+
+  return {
+    openTabPaths,
+    activeTabPath,
+    collapsedFolderPaths,
+  };
+}
+
+function normalizeWorkspaceStates(items: Record<string, WorkspaceSessionState> | undefined): Record<string, WorkspaceSessionState> {
+  if (!items || typeof items !== 'object') return {};
+
+  const workspaceStates: Record<string, WorkspaceSessionState> = {};
+  for (const [workspacePath, state] of Object.entries(items)) {
+    const normalizedWorkspacePath = typeof workspacePath === 'string' ? workspacePath.trim() : '';
+    if (!normalizedWorkspacePath) continue;
+    workspaceStates[normalizedWorkspacePath] = normalizeWorkspaceSessionState(state);
+  }
+  return workspaceStates;
+}
+
+function normalizeFolderId(path: string) {
+  return path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
 
 function normalizeRecentType(type: string | undefined): RecentDocument['type'] {

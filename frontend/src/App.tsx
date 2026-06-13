@@ -17,7 +17,7 @@ import {
   normalizeConfig,
   resolveTheme,
 } from './state/documentStore';
-import type { AppConfig, DocumentPayload, DocumentState, EditorMode, HotkeyBinding, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
+import type { AppConfig, DocumentPayload, DocumentState, EditorMode, HotkeyBinding, OutlineItem, RecentDocument, SaveResult, Workspace, WorkspaceSessionState } from './types/app';
 import {
   CreateWorkspaceFile,
   CreateWorkspaceFolder,
@@ -55,9 +55,16 @@ function App() {
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const restoredRecentRef = useRef(false);
+  const sessionPersistenceReadyRef = useRef(false);
+  const lastPersistedSessionRef = useRef('');
   const [message, setMessage] = useState('Ready');
 
   const activeTab = tabs[activeTabIndex];
+  const currentWorkspacePath = workspace?.rootPath ?? '';
+  const currentWorkspaceSession = useMemo(
+    () => resolveWorkspaceSessionState(config, currentWorkspacePath),
+    [config, currentWorkspacePath],
+  );
 
   const updateActiveTab = useCallback((updater: (tab: DocumentState) => DocumentState) => {
     setTabs(prev => {
@@ -110,6 +117,24 @@ function App() {
         const merged = normalizeConfig(loaded);
         setConfig(merged);
 
+        const startupWorkspacePath = resolveStartupWorkspacePath(merged);
+        if (startupWorkspacePath) {
+          try {
+            const ws = await ScanFolder(startupWorkspacePath);
+            if (!active) return;
+            await handleWorkspaceLoaded(ws);
+            await restoreSessionTabs(merged, startupWorkspacePath);
+            return;
+          } catch (error) {
+            console.error(error);
+            if (startupWorkspacePath === merged.workspacePath) {
+              void persistConfig({ workspacePath: '' });
+            }
+          }
+        }
+
+        if (await restoreSessionTabs(merged, '')) return;
+
         const latestRecent = merged.recentDocuments[0];
         if (!latestRecent?.path) return;
         if (latestRecent.type === 'folder') {
@@ -138,7 +163,12 @@ function App() {
           void persistConfig({ recentDocuments: merged.recentDocuments.filter((_, i) => i !== 0) });
         }
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => {
+        if (active) {
+          sessionPersistenceReadyRef.current = true;
+        }
+      });
 
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,11 +198,11 @@ function App() {
     };
   }, []);
 
-  const persistConfig = useCallback(async (updates: Partial<AppConfig>) => {
-    setConfig((current) => ({ ...current, ...updates }));
+  const persistConfigWith = useCallback(async (updater: (current: AppConfig) => AppConfig) => {
+    setConfig((current) => updater(current));
     try {
       const latest = normalizeConfig(await LoadConfig());
-      const nextConfig = { ...latest, ...updates };
+      const nextConfig = updater(latest);
       const saved = normalizeConfig(await SaveConfig(models.AppConfig.createFrom(nextConfig)));
       setConfig(saved);
     } catch (error) {
@@ -180,6 +210,70 @@ function App() {
       setMessage('Could not save settings');
     }
   }, []);
+
+  const persistConfig = useCallback(async (updates: Partial<AppConfig>) => {
+    await persistConfigWith((current) => ({ ...current, ...updates }));
+  }, [persistConfigWith]);
+
+  const persistWorkspaceSessionState = useCallback(async (workspacePath: string, updates: Partial<WorkspaceSessionState>) => {
+    await persistConfigWith((current) => applyWorkspaceSessionState(current, workspacePath, updates));
+  }, [persistConfigWith]);
+
+  async function restoreSessionTabs(sessionConfig: AppConfig, workspacePath = '') {
+    const sessionState = resolveWorkspaceSessionState(sessionConfig, workspacePath);
+    const sessionPaths = sessionState.openTabPaths.filter(Boolean);
+    if (sessionPaths.length === 0) return false;
+
+    const results = await Promise.allSettled(sessionPaths.map((path) => ReadDocument(path)));
+    const restoredPayloads: DocumentPayload[] = [];
+
+    for (const result of results) {
+      if (result.status !== 'fulfilled' || !result.value?.path) continue;
+      restoredPayloads.push(result.value);
+    }
+
+    if (restoredPayloads.length === 0) {
+      lastPersistedSessionRef.current = serializeSessionSnapshot(workspacePath, [], '');
+      void persistWorkspaceSessionState(workspacePath, { openTabPaths: [], activeTabPath: '' });
+      return false;
+    }
+
+    const restoredTabs = restoredPayloads.map(documentFromPayload);
+    const nextActiveIndex = sessionState.activeTabPath
+      ? restoredTabs.findIndex((tab) => tab.path === sessionState.activeTabPath)
+      : 0;
+    const normalizedActiveIndex = nextActiveIndex >= 0 ? nextActiveIndex : 0;
+    const normalizedOpenTabPaths = restoredTabs.map((tab) => tab.path);
+    const normalizedActiveTabPath = restoredTabs[normalizedActiveIndex]?.path || '';
+
+    restoredRecentRef.current = true;
+    setTabs(restoredTabs);
+    setActiveTabIndex(normalizedActiveIndex);
+    for (const payload of restoredPayloads) {
+      if (payload.lastModified) {
+        void WatchFile(payload.path, payload.lastModified);
+      }
+    }
+
+    const snapshot = serializeSessionSnapshot(workspacePath, normalizedOpenTabPaths, normalizedActiveTabPath);
+    lastPersistedSessionRef.current = snapshot;
+
+    if (
+      normalizedOpenTabPaths.length !== sessionState.openTabPaths.length ||
+      normalizedOpenTabPaths.some((path, index) => path !== sessionState.openTabPaths[index]) ||
+      normalizedActiveTabPath !== sessionState.activeTabPath
+    ) {
+      void persistWorkspaceSessionState(workspacePath, {
+        openTabPaths: normalizedOpenTabPaths,
+        activeTabPath: normalizedActiveTabPath,
+      });
+    }
+
+    setMessage(restoredTabs.length === 1
+      ? `Restored ${restoredTabs[0].name}`
+      : `Restored ${restoredTabs.length} tabs`);
+    return true;
+  }
 
   const saveToPath = useCallback(async (path: string, markdown: string) => {
     const result = await SaveDocument(path, markdown);
@@ -196,6 +290,18 @@ function App() {
   const handleSourceReady = useCallback((textarea: HTMLTextAreaElement | null) => {
     sourceTextareaRef.current = textarea;
   }, []);
+
+  useEffect(() => {
+    if (!sessionPersistenceReadyRef.current) return;
+
+    const openTabPaths = tabs.filter((tab) => tab.path).map((tab) => tab.path);
+    const activeTabPath = tabs[activeTabIndex]?.path || '';
+    const snapshot = serializeSessionSnapshot(currentWorkspacePath, openTabPaths, activeTabPath);
+    if (lastPersistedSessionRef.current === snapshot) return;
+
+    lastPersistedSessionRef.current = snapshot;
+    void persistWorkspaceSessionState(currentWorkspacePath, { openTabPaths, activeTabPath });
+  }, [tabs, activeTabIndex, currentWorkspacePath, persistWorkspaceSessionState]);
 
   const handleNew = useCallback(() => {
     const newTab = createEmptyDocument();
@@ -502,19 +608,17 @@ function App() {
       if (!nextWorkspace?.rootPath) return;
       setWorkspace({ ...nextWorkspace, files: nextWorkspace.files ?? [] });
       setConfig((current) => ({ ...current, workspacePath: nextWorkspace.rootPath, showSidebar: true }));
-      if (!config.showSidebar) {
-        void persistConfig({ showSidebar: true });
-      }
+      void persistConfig({ workspacePath: nextWorkspace.rootPath, showSidebar: true });
       setMessage(`Opened folder ${nextWorkspace.name || displayNameFromPath(nextWorkspace.rootPath)}`);
     } catch (error) {
       console.error(error);
       setMessage('Open folder failed');
     }
-  }, [config, persistConfig]);
+  }, [persistConfig]);
 
   const handleWorkspaceLoaded = useCallback(async (ws: Workspace) => {
     if (!ws?.rootPath) return;
-    const prevWorkspacePath = (await LoadConfig())?.workspacePath ?? '';
+    const latestConfig = normalizeConfig(await LoadConfig());
 
     setWorkspace({ ...ws, files: ws.files ?? [] });
     setConfig((current) => ({
@@ -522,13 +626,11 @@ function App() {
       showSidebar: true,
       workspacePath: ws.rootPath,
     }));
-    if (!config.showSidebar) {
+    if (!latestConfig.showSidebar || latestConfig.workspacePath !== ws.rootPath) {
       void persistConfig({ showSidebar: true, workspacePath: ws.rootPath });
-    } else if (ws.rootPath !== prevWorkspacePath) {
-      void persistConfig({ workspacePath: ws.rootPath });
     }
     if (!restoredRecentRef.current) setMessage(`Workspace: ${ws.name || displayNameFromPath(ws.rootPath)}`);
-  }, [config, persistConfig]);
+  }, [persistConfig]);
 
   const handleToggleSidebar = useCallback(() => {
     const next = !config.showSidebar;
@@ -558,6 +660,10 @@ function App() {
     setConfig((current) => ({ ...current, autoSave: enabled }));
     void persistConfig({ autoSave: enabled });
   }, [persistConfig]);
+
+  const handleCollapsedFoldersChange = useCallback((collapsedFolderPaths: string[]) => {
+    void persistWorkspaceSessionState(currentWorkspacePath, { collapsedFolderPaths });
+  }, [currentWorkspacePath, persistWorkspaceSessionState]);
 
   const handleRefreshWorkspace = useCallback(async () => {
     if (!workspace?.rootPath) return;
@@ -1053,8 +1159,10 @@ function App() {
             currentPath={activeTab.path}
             openPaths={tabs.map(t => t.path).filter(Boolean)}
             workspace={workspace}
+            initialCollapsedFolderPaths={currentWorkspaceSession.collapsedFolderPaths}
             onOpenWorkspaceFile={handleOpenWorkspaceFile}
             onRefreshWorkspace={handleRefreshWorkspace}
+            onCollapsedFoldersChange={handleCollapsedFoldersChange}
             onFileDeleted={handleDeleteWorkspaceItem}
             onFileRenamed={handleRenameWorkspaceItem}
             onCreateFile={handleCreateWorkspaceFile}
@@ -1132,6 +1240,73 @@ function normalizePathForCompare(path: string) {
 function trimTrailingSlashes(path: string) {
   if (path === '/' || /^[a-z]:\/$/i.test(path)) return path;
   return path.replace(/\/+$/, '');
+}
+
+function resolveWorkspaceSessionState(config: AppConfig, workspacePath: string): WorkspaceSessionState {
+  if (workspacePath) {
+    const savedState = config.workspaceStates[workspacePath];
+    if (savedState) {
+      return cloneWorkspaceSessionState(savedState);
+    }
+
+    if (config.workspacePath === workspacePath && Object.keys(config.workspaceStates).length === 0) {
+      return {
+        openTabPaths: [...config.openTabPaths],
+        activeTabPath: config.activeTabPath,
+        collapsedFolderPaths: [...config.collapsedFolderPaths],
+      };
+    }
+  }
+
+  return {
+    openTabPaths: workspacePath ? [] : [...config.openTabPaths],
+    activeTabPath: workspacePath ? '' : config.activeTabPath,
+    collapsedFolderPaths: workspacePath ? [] : [...config.collapsedFolderPaths],
+  };
+}
+
+function applyWorkspaceSessionState(
+  config: AppConfig,
+  workspacePath: string,
+  updates: Partial<WorkspaceSessionState>,
+): AppConfig {
+  const currentState = resolveWorkspaceSessionState(config, workspacePath);
+  const nextState: WorkspaceSessionState = {
+    openTabPaths: updates.openTabPaths ? [...updates.openTabPaths] : currentState.openTabPaths,
+    activeTabPath: typeof updates.activeTabPath === 'string' ? updates.activeTabPath : currentState.activeTabPath,
+    collapsedFolderPaths: updates.collapsedFolderPaths ? [...updates.collapsedFolderPaths] : currentState.collapsedFolderPaths,
+  };
+
+  const nextConfig: AppConfig = {
+    ...config,
+    openTabPaths: [...nextState.openTabPaths],
+    activeTabPath: nextState.activeTabPath,
+    collapsedFolderPaths: [...nextState.collapsedFolderPaths],
+  };
+
+  if (!workspacePath) {
+    return nextConfig;
+  }
+
+  return {
+    ...nextConfig,
+    workspaceStates: {
+      ...config.workspaceStates,
+      [workspacePath]: cloneWorkspaceSessionState(nextState),
+    },
+  };
+}
+
+function cloneWorkspaceSessionState(state: WorkspaceSessionState): WorkspaceSessionState {
+  return {
+    openTabPaths: [...state.openTabPaths],
+    activeTabPath: state.activeTabPath,
+    collapsedFolderPaths: [...state.collapsedFolderPaths],
+  };
+}
+
+function serializeSessionSnapshot(workspacePath: string, openTabPaths: string[], activeTabPath: string) {
+  return JSON.stringify({ workspacePath, openTabPaths, activeTabPath });
 }
 
 export default App;

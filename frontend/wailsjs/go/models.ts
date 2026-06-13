@@ -48,6 +48,22 @@ export namespace models {
 	        this.lastOpenedAt = source["lastOpenedAt"];
 	    }
 	}
+	export class WorkspaceSessionState {
+	    openTabPaths: string[];
+	    activeTabPath: string;
+	    collapsedFolderPaths: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceSessionState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.openTabPaths = source["openTabPaths"];
+	        this.activeTabPath = source["activeTabPath"];
+	        this.collapsedFolderPaths = source["collapsedFolderPaths"];
+	    }
+	}
 	export class AppConfig {
 	    theme: string;
 	    autoSave: boolean;
@@ -56,6 +72,10 @@ export namespace models {
 	    showOutline: boolean;
 	    editorMode: string;
 	    workspacePath: string;
+	    openTabPaths: string[];
+	    activeTabPath: string;
+	    collapsedFolderPaths: string[];
+	    workspaceStates: Record<string, WorkspaceSessionState>;
 	    recentDocuments: RecentDocument[];
 	    hotkeys: HotkeyBinding[];
 	
@@ -72,6 +92,10 @@ export namespace models {
 	        this.showOutline = source["showOutline"];
 	        this.editorMode = source["editorMode"];
 	        this.workspacePath = source["workspacePath"];
+	        this.openTabPaths = source["openTabPaths"];
+	        this.activeTabPath = source["activeTabPath"];
+	        this.collapsedFolderPaths = source["collapsedFolderPaths"];
+	        this.workspaceStates = this.convertValues(source["workspaceStates"], WorkspaceSessionState, true);
 	        this.recentDocuments = this.convertValues(source["recentDocuments"], RecentDocument);
 	        this.hotkeys = this.convertValues(source["hotkeys"], HotkeyBinding);
 	    }
@@ -250,6 +274,7 @@ export namespace models {
 		    return a;
 		}
 	}
+	
 
 }
 

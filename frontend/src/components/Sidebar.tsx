@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, ListTree, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FilePlus, FileText, Folder, FolderOpen, FolderPlus, ListTree, Pencil, Trash2 } from 'lucide-react';
 import type { OutlineItem, Workspace, WorkspaceFile } from '../types/app';
 
 interface SidebarProps {
   currentPath: string;
   openPaths: string[];
   workspace: Workspace | null;
+  initialCollapsedFolderPaths: string[];
   onOpenWorkspaceFile: (path: string) => void;
   onRefreshWorkspace: () => void;
+  onCollapsedFoldersChange: (paths: string[]) => void;
   onFileDeleted: (path: string) => void;
   onFileRenamed: (oldPath: string, newPath: string) => void;
   onCreateFile: (parentDir: string) => void;
@@ -41,8 +43,22 @@ interface SidebarContextMenu {
   item: WorkspaceTreeItem;
 }
 
-export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile, onRefreshWorkspace, onFileDeleted, onFileRenamed, onCreateFile, onCreateFolder, onMoveItem }: SidebarProps) {
+export function Sidebar({
+  currentPath,
+  openPaths,
+  workspace,
+  initialCollapsedFolderPaths,
+  onOpenWorkspaceFile,
+  onRefreshWorkspace,
+  onCollapsedFoldersChange,
+  onFileDeleted,
+  onFileRenamed,
+  onCreateFile,
+  onCreateFolder,
+  onMoveItem,
+}: SidebarProps) {
   const tree = useMemo(() => buildWorkspaceTree(workspace?.files ?? []), [workspace?.files]);
+  const allFolderIds = useMemo(() => collectFolderIds(tree), [tree]);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<SidebarContextMenu | null>(null);
@@ -50,8 +66,10 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
   const renameInputRef = useRef<HTMLInputElement>(null!);
 
   useEffect(() => {
-    setCollapsedFolders(new Set());
-  }, [workspace?.rootPath]);
+    const validFolderIds = new Set(allFolderIds);
+    const nextCollapsedFolders = initialCollapsedFolderPaths.filter((id) => validFolderIds.has(id));
+    setCollapsedFolders(new Set(nextCollapsedFolders));
+  }, [workspace?.rootPath, initialCollapsedFolderPaths, allFolderIds]);
 
   // Close context menu on outside click / Escape
   useEffect(() => {
@@ -78,8 +96,16 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
     return filterTree(tree, searchQuery);
   }, [tree, searchQuery, isSearching]);
 
-  const toggleFolder = (id: string) => {
+  const updateCollapsedFolders = (updater: (current: Set<string>) => Set<string>) => {
     setCollapsedFolders((current) => {
+      const next = updater(current);
+      onCollapsedFoldersChange(Array.from(next).sort());
+      return next;
+    });
+  };
+
+  const toggleFolder = (id: string) => {
+    updateCollapsedFolders((current) => {
       const next = new Set(current);
       if (next.has(id)) {
         next.delete(id);
@@ -88,6 +114,14 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
       }
       return next;
     });
+  };
+
+  const handleExpandAll = () => {
+    updateCollapsedFolders(() => new Set());
+  };
+
+  const handleCollapseAll = () => {
+    updateCollapsedFolders(() => new Set(allFolderIds));
   };
 
   const handleContextMenu = (e: React.MouseEvent, item: WorkspaceTreeItem) => {
@@ -145,9 +179,33 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
   return (
     <aside className="sidebar">
       <section className="sidebar-section workspace-section">
-        <div className="sidebar-heading">
-          <Folder size={15} />
-          <span>{workspace?.name || 'Workspace'}</span>
+        <div className="sidebar-heading sidebar-heading-row">
+          <div className="sidebar-heading-title">
+            <Folder size={15} />
+            <span>{workspace?.name || 'Workspace'}</span>
+          </div>
+          <div className="sidebar-heading-actions">
+            <button
+              type="button"
+              className="sidebar-action-button"
+              title="全部展开"
+              aria-label="全部展开"
+              onClick={handleExpandAll}
+              disabled={!workspace || allFolderIds.length === 0}
+            >
+              <ChevronsDown size={14} />
+            </button>
+            <button
+              type="button"
+              className="sidebar-action-button"
+              title="全部折叠"
+              aria-label="全部折叠"
+              onClick={handleCollapseAll}
+              disabled={!workspace || allFolderIds.length === 0}
+            >
+              <ChevronsUp size={14} />
+            </button>
+          </div>
         </div>
         <div className="sidebar-search">
           <input
@@ -499,6 +557,18 @@ function sortTree(items: WorkspaceTreeItem[]) {
   for (const item of items) {
     if (item.type === 'folder') sortTree(item.children);
   }
+}
+
+function collectFolderIds(items: WorkspaceTreeItem[]): string[] {
+  const folderIds: string[] = [];
+
+  for (const item of items) {
+    if (item.type !== 'folder') continue;
+    folderIds.push(item.id);
+    folderIds.push(...collectFolderIds(item.children));
+  }
+
+  return folderIds;
 }
 
 /**

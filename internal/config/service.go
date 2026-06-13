@@ -31,14 +31,18 @@ func NewService(appName string) *Service {
 
 func DefaultConfig() models.AppConfig {
 	return models.AppConfig{
-		Theme:           "system",
-		AutoSave:        true,
-		AutoSaveDelay:   1200,
-		ShowSidebar:     true,
-		ShowOutline:     true,
-		EditorMode:      "rendered",
-		WorkspacePath:   "",
-		RecentDocuments: []models.RecentDocument{},
+		Theme:                "system",
+		AutoSave:             true,
+		AutoSaveDelay:        1200,
+		ShowSidebar:          true,
+		ShowOutline:          true,
+		EditorMode:           "rendered",
+		WorkspacePath:        "",
+		OpenTabPaths:         []string{},
+		ActiveTabPath:        "",
+		CollapsedFolderPaths: []string{},
+		WorkspaceStates:      map[string]models.WorkspaceSessionState{},
+		RecentDocuments:      []models.RecentDocument{},
 	}
 }
 
@@ -166,6 +170,21 @@ func normalizeConfig(config models.AppConfig) models.AppConfig {
 	if strings.TrimSpace(config.WorkspacePath) != "" {
 		config.WorkspacePath = filepath.Clean(config.WorkspacePath)
 	}
+	if config.OpenTabPaths == nil {
+		config.OpenTabPaths = []string{}
+	}
+	config.OpenTabPaths = normalizeOpenTabPaths(config.OpenTabPaths)
+	if strings.TrimSpace(config.ActiveTabPath) != "" {
+		config.ActiveTabPath = filepath.Clean(config.ActiveTabPath)
+	}
+	if config.CollapsedFolderPaths == nil {
+		config.CollapsedFolderPaths = []string{}
+	}
+	config.CollapsedFolderPaths = normalizeCollapsedFolderPaths(config.CollapsedFolderPaths)
+	if config.WorkspaceStates == nil {
+		config.WorkspaceStates = map[string]models.WorkspaceSessionState{}
+	}
+	config.WorkspaceStates = normalizeWorkspaceStates(config.WorkspaceStates)
 	if config.RecentDocuments == nil {
 		config.RecentDocuments = []models.RecentDocument{}
 	}
@@ -174,6 +193,26 @@ func normalizeConfig(config models.AppConfig) models.AppConfig {
 		config.Hotkeys = models.DefaultHotkeys()
 	}
 	return config
+}
+
+func normalizeOpenTabPaths(paths []string) []string {
+	normalized := make([]string, 0, len(paths))
+	seen := map[string]struct{}{}
+
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		path = filepath.Clean(path)
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		seen[path] = struct{}{}
+		normalized = append(normalized, path)
+	}
+
+	return normalized
 }
 
 func normalizeRecentDocuments(items []models.RecentDocument) []models.RecentDocument {
@@ -202,6 +241,58 @@ func normalizeRecentDocuments(items []models.RecentDocument) []models.RecentDocu
 		}
 	}
 	return recent
+}
+
+func normalizeWorkspaceStates(items map[string]models.WorkspaceSessionState) map[string]models.WorkspaceSessionState {
+	normalized := make(map[string]models.WorkspaceSessionState, len(items))
+
+	for workspacePath, state := range items {
+		workspacePath = strings.TrimSpace(workspacePath)
+		if workspacePath == "" {
+			continue
+		}
+		workspacePath = filepath.Clean(workspacePath)
+		normalized[workspacePath] = models.WorkspaceSessionState{
+			OpenTabPaths:         normalizeOpenTabPaths(state.OpenTabPaths),
+			ActiveTabPath:        normalizeOptionalFilePath(state.ActiveTabPath),
+			CollapsedFolderPaths: normalizeCollapsedFolderPaths(state.CollapsedFolderPaths),
+		}
+	}
+
+	return normalized
+}
+
+func normalizeCollapsedFolderPaths(paths []string) []string {
+	normalized := make([]string, 0, len(paths))
+	seen := map[string]struct{}{}
+
+	for _, path := range paths {
+		path = normalizeFolderID(path)
+		if path == "" {
+			continue
+		}
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		seen[path] = struct{}{}
+		normalized = append(normalized, path)
+	}
+
+	return normalized
+}
+
+func normalizeOptionalFilePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	return filepath.Clean(path)
+}
+
+func normalizeFolderID(path string) string {
+	path = strings.TrimSpace(path)
+	path = strings.ReplaceAll(path, "\\", "/")
+	return strings.Trim(path, "/")
 }
 
 func normalizeRecentType(itemType string) string {

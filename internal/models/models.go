@@ -33,6 +33,13 @@ type Workspace struct {
 	Files    []WorkspaceFile `json:"files"`
 }
 
+// WorkspaceSessionState stores UI session state per workspace.
+type WorkspaceSessionState struct {
+	OpenTabPaths         []string `json:"openTabPaths"`
+	ActiveTabPath        string   `json:"activeTabPath"`
+	CollapsedFolderPaths []string `json:"collapsedFolderPaths"`
+}
+
 // SaveResult is returned after a successful save.
 type SaveResult struct {
 	Path    string `json:"path"`
@@ -50,15 +57,19 @@ type RecentDocument struct {
 
 // AppConfig stores editor preferences and recent documents.
 type AppConfig struct {
-	Theme           string           `json:"theme"`
-	AutoSave        bool             `json:"autoSave"`
-	AutoSaveDelay   int              `json:"autoSaveDelay"`
-	ShowSidebar     bool             `json:"showSidebar"`
-	ShowOutline     bool             `json:"showOutline"`
-	EditorMode      string           `json:"editorMode"`
-	WorkspacePath   string           `json:"workspacePath"`
-	RecentDocuments []RecentDocument `json:"recentDocuments"`
-	Hotkeys         []HotkeyBinding  `json:"hotkeys"`
+	Theme                string                           `json:"theme"`
+	AutoSave             bool                             `json:"autoSave"`
+	AutoSaveDelay        int                              `json:"autoSaveDelay"`
+	ShowSidebar          bool                             `json:"showSidebar"`
+	ShowOutline          bool                             `json:"showOutline"`
+	EditorMode           string                           `json:"editorMode"`
+	WorkspacePath        string                           `json:"workspacePath"`
+	OpenTabPaths         []string                         `json:"openTabPaths"`
+	ActiveTabPath        string                           `json:"activeTabPath"`
+	CollapsedFolderPaths []string                         `json:"collapsedFolderPaths"`
+	WorkspaceStates      map[string]WorkspaceSessionState `json:"workspaceStates"`
+	RecentDocuments      []RecentDocument                 `json:"recentDocuments"`
+	Hotkeys              []HotkeyBinding                  `json:"hotkeys"`
 }
 
 // ExportPayload carries HTML content generated from the active Markdown document.
