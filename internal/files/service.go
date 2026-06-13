@@ -587,6 +587,74 @@ func (s *Service) RenameWorkspaceItem(oldPath, newName string) (models.Workspace
 	}, nil
 }
 
+// MoveWorkspaceItem moves a file or folder to a new parent directory.
+func (s *Service) MoveWorkspaceItem(oldPath string, newParentDir string) (models.WorkspaceFile, error) {
+	if strings.TrimSpace(oldPath) == "" {
+		return models.WorkspaceFile{}, errors.New("source path is required")
+	}
+	if strings.TrimSpace(newParentDir) == "" {
+		return models.WorkspaceFile{}, errors.New("target directory is required")
+	}
+
+	oldPath = filepath.Clean(oldPath)
+	newParentDir = filepath.Clean(newParentDir)
+
+	// Verify source exists
+	srcInfo, err := os.Stat(oldPath)
+	if err != nil {
+		return models.WorkspaceFile{}, fmt.Errorf("source does not exist: %w", err)
+	}
+
+	// Verify target directory exists
+	tgtInfo, err := os.Stat(newParentDir)
+	if err != nil {
+		return models.WorkspaceFile{}, fmt.Errorf("target directory does not exist: %w", err)
+	}
+	if !tgtInfo.IsDir() {
+		return models.WorkspaceFile{}, errors.New("target is not a directory")
+	}
+
+	name := filepath.Base(oldPath)
+	newPath := filepath.Join(newParentDir, name)
+	newPath = filepath.Clean(newPath)
+
+	// No-op
+	if oldPath == newPath {
+		return models.WorkspaceFile{Path: oldPath, Name: name, Size: srcInfo.Size(), ModifiedAt: srcInfo.ModTime().Format(time.RFC3339)}, nil
+	}
+
+	// Prevent moving a folder into itself
+	if srcInfo.IsDir() {
+		oldWithSep := oldPath + string(filepath.Separator)
+		newWithSep := newPath + string(filepath.Separator)
+		if strings.HasPrefix(newWithSep, oldWithSep) {
+			return models.WorkspaceFile{}, errors.New("cannot move a folder into itself")
+		}
+	}
+
+	// Check for name conflict
+	if _, err := os.Stat(newPath); err == nil {
+		return models.WorkspaceFile{}, fmt.Errorf("a file or folder named %q already exists in the target directory", name)
+	}
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return models.WorkspaceFile{}, fmt.Errorf("move failed: %w", err)
+	}
+
+	// Refresh info after move
+	newInfo, err := os.Stat(newPath)
+	if err != nil {
+		return models.WorkspaceFile{Path: newPath, Name: filepath.Base(newPath)}, nil
+	}
+
+	return models.WorkspaceFile{
+		Path:       newPath,
+		Name:       filepath.Base(newPath),
+		Size:       newInfo.Size(),
+		ModifiedAt: newInfo.ModTime().Format(time.RFC3339),
+	}, nil
+}
+
 // SaveImageFile saves raw image bytes to an assets/ directory next to the document.
 // If documentPath is empty, the image is saved alongside a temp location and the
 // absolute path is returned.  Callers should fall back to Base64 data URLs in that case.

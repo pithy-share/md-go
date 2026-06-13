@@ -12,6 +12,7 @@ interface SidebarProps {
   onFileRenamed: (oldPath: string, newPath: string) => void;
   onCreateFile: (parentDir: string) => void;
   onCreateFolder: (parentDir: string) => void;
+  onMoveItem: (oldPath: string, newParentDir: string) => void;
 }
 
 interface OutlinePanelProps {
@@ -40,7 +41,7 @@ interface SidebarContextMenu {
   item: WorkspaceTreeItem;
 }
 
-export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile, onRefreshWorkspace, onFileDeleted, onFileRenamed, onCreateFile, onCreateFolder }: SidebarProps) {
+export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile, onRefreshWorkspace, onFileDeleted, onFileRenamed, onCreateFile, onCreateFolder, onMoveItem }: SidebarProps) {
   const tree = useMemo(() => buildWorkspaceTree(workspace?.files ?? []), [workspace?.files]);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -178,6 +179,8 @@ export function Sidebar({ currentPath, openPaths, workspace, onOpenWorkspaceFile
               onRenameCommit={handleRenameCommit}
               onRenameCancel={handleRenameCancel}
               onRenameStart={handleRenameStart}
+              onMoveItem={onMoveItem}
+              workspaceRoot={workspace?.rootPath ?? ''}
             />
           )}
         </div>
@@ -285,6 +288,8 @@ function WorkspaceTree({
   onRenameCommit,
   onRenameCancel,
   onRenameStart,
+  onMoveItem,
+  workspaceRoot,
 }: {
   currentPath: string;
   openPaths: string[];
@@ -299,22 +304,67 @@ function WorkspaceTree({
   onRenameCommit: (item: WorkspaceTreeItem, newName: string) => void;
   onRenameCancel: () => void;
   onRenameStart: (item: WorkspaceTreeItem) => void;
+  onMoveItem: (oldPath: string, newParentDir: string) => void;
+  workspaceRoot: string;
 }) {
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, item: WorkspaceTreeItem) => {
+    const path = item.type === 'file' ? item.file.path : (item as WorkspaceFolderNode).id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', path);
+    e.dataTransfer.setData('application/x-workspace-item', JSON.stringify({
+      type: item.type,
+      path: path,
+      name: item.type === 'file' ? item.file.name : item.name,
+    }));
+  };
+
+  const handleDragOver = (e: React.DragEvent, folderItem: WorkspaceFolderNode) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(folderItem.id);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, folderItem: WorkspaceFolderNode) => {
+    e.preventDefault();
+    setDragOverId(null);
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/x-workspace-item'));
+      if (data?.path && data.path !== folderItem.id) {
+        const targetDir = workspaceRoot ? workspaceRoot + '/' + folderItem.id : folderItem.id;
+        onMoveItem(data.path, targetDir);
+      }
+    } catch {
+      // ignore invalid drops
+    }
+  };
+
   return (
     <>
       {items.map((item) => {
         if (item.type === 'folder') {
           const collapsed = collapsedFolders.has(item.id);
           const isRenaming = renameItem?.item === item;
+          const isDragOver = dragOverId === item.id;
           return (
             <div key={item.id} className="tree-branch">
               <button
-                className={`tree-item tree-folder${isRenaming ? ' inline-editing' : ''}`}
+                className={`tree-item tree-folder${isRenaming ? ' inline-editing' : ''}${isDragOver ? ' drag-over' : ''}`}
                 style={{ paddingLeft: `${8 + level * 14}px` }}
+                draggable={!isRenaming}
                 onClick={() => !isRenaming && onToggleFolder(item.id)}
                 onContextMenu={(e) => {
                   if (!isRenaming) onContextMenu(e, item);
                 }}
+                onDragStart={(e) => handleDragStart(e, item)}
+                onDragOver={(e) => handleDragOver(e, item)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, item)}
               >
                 {collapsed ? <ChevronRight className="tree-toggle" size={14} /> : <ChevronDown className="tree-toggle" size={14} />}
                 {collapsed ? <Folder size={15} /> : <FolderOpen size={15} />}
@@ -355,6 +405,8 @@ function WorkspaceTree({
                   onRenameCommit={onRenameCommit}
                   onRenameCancel={onRenameCancel}
                   onRenameStart={onRenameStart}
+                  onMoveItem={onMoveItem}
+                  workspaceRoot={workspaceRoot}
                 />
               )}
             </div>
@@ -368,10 +420,12 @@ function WorkspaceTree({
             className={`tree-item tree-file${item.file.path === currentPath ? ' active' : ''}${item.file.path !== currentPath && openPaths.includes(item.file.path) ? ' tab-open' : ''}${isRenaming ? ' inline-editing' : ''}`}
             style={{ paddingLeft: `${8 + level * 14}px` }}
             title={item.file.path}
+            draggable={!isRenaming}
             onClick={() => !isRenaming && onOpenWorkspaceFile(item.file.path)}
             onContextMenu={(e) => {
               if (!isRenaming) onContextMenu(e, item);
             }}
+            onDragStart={(e) => handleDragStart(e, item)}
           >
             <span className="tree-spacer" />
             <FileText size={15} />

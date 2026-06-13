@@ -23,6 +23,7 @@ import {
   CreateWorkspaceFolder,
   DeleteWorkspaceItem,
   ExportHTML,
+  MoveWorkspaceItem,
   ExportPDF,
   LoadConfig,
   LoadHotkeys,
@@ -700,6 +701,34 @@ function App() {
     }));
   }, []);
 
+  const handleMoveWorkspaceItem = useCallback(async (oldPath: string, newParentDir: string) => {
+    try {
+      const result = await MoveWorkspaceItem(oldPath, newParentDir);
+      // Update tabs that reference the moved file
+      setTabs(prev => prev.map(t => {
+        if (t.path === oldPath) {
+          void UnwatchFile(oldPath);
+          void WatchFile(result.path, result.modifiedAt || '');
+          return { ...t, path: result.path, name: result.name };
+        }
+        // If a folder was moved, update all files under it
+        if (t.path && (t.path.startsWith(oldPath + '/') || t.path.startsWith(oldPath + '\\'))) {
+          const relPath = t.path.substring(oldPath.length + 1);
+          const newTabPath = result.path + '/' + relPath;
+          void UnwatchFile(t.path);
+          void WatchFile(newTabPath, t.lastSavedAt || '');
+          return { ...t, path: newTabPath };
+        }
+        return t;
+      }));
+      await handleRefreshWorkspace();
+      setMessage(`移动成功: ${result.name}`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`移动失败: ${error}`);
+    }
+  }, [handleRefreshWorkspace]);
+
   const handleToggleHotkeySettings = useCallback(() => {
     setHotkeySettingsOpen((open) => !open);
   }, []);
@@ -1030,6 +1059,7 @@ function App() {
             onFileRenamed={handleRenameWorkspaceItem}
             onCreateFile={handleCreateWorkspaceFile}
             onCreateFolder={handleCreateWorkspaceFolder}
+            onMoveItem={handleMoveWorkspaceItem}
           />
         )}
         <section className="document-area">

@@ -38,6 +38,10 @@ export function LoadHotkeys() {
   return window['go']['main']['App']['LoadHotkeys']();
 }
 
+export function MoveWorkspaceItem(arg1, arg2) {
+  return window['go']['main']['App']['MoveWorkspaceItem'](arg1, arg2);
+}
+
 export function NewDocument() {
   return window['go']['main']['App']['NewDocument']();
 }

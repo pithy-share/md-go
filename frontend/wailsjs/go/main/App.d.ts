@@ -20,6 +20,8 @@ export function LoadConfig():Promise<models.AppConfig>;
 
 export function LoadHotkeys():Promise<Array<models.HotkeyBinding>>;
 
+export function MoveWorkspaceItem(arg1:string,arg2:string):Promise<models.WorkspaceFile>;
+
 export function NewDocument():Promise<models.DocumentMeta>;
 
 export function OpenDocument():Promise<models.DocumentPayload>;

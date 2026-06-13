@@ -135,6 +135,11 @@ func (a *App) RenameWorkspaceItem(oldPath string, newName string) (models.Worksp
 	return a.files.RenameWorkspaceItem(oldPath, newName)
 }
 
+// MoveWorkspaceItem moves a file or folder to a different parent directory.
+func (a *App) MoveWorkspaceItem(oldPath string, newParentDir string) (models.WorkspaceFile, error) {
+	return a.files.MoveWorkspaceItem(oldPath, newParentDir)
+}
+
 // WatchFile registers a file for external modification monitoring.
 func (a *App) WatchFile(path string, lastModified string) {
 	a.files.WatchFile(path, lastModified)
