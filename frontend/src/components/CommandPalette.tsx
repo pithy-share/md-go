@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import type { CommandItem } from '../types/app';
+import { t } from '../i18n';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -14,11 +15,11 @@ interface CategoryGroup {
 }
 
 const categoryDisplayNames: Record<CommandItem['category'], string> = {
-  file: 'File',
-  edit: 'Edit',
-  view: 'View',
-  tab: 'Tab',
-  format: 'Format',
+  file: t('category.file'),
+  edit: t('category.edit'),
+  view: t('category.view'),
+  tab: t('category.tab'),
+  format: t('category.format'),
 };
 
 const categoryOrder: CommandItem['category'][] = ['file', 'edit', 'format', 'view', 'tab'];
@@ -125,7 +126,7 @@ export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProp
           <input
             ref={inputRef}
             className="command-palette-input"
-            placeholder="Type a command..."
+            placeholder={t('command.placeholder')}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -136,7 +137,7 @@ export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProp
         </div>
         <div className="command-palette-list">
           {filteredGroups.length === 0 ? (
-            <div className="empty-state">No matching commands</div>
+            <div className="empty-state">{t('command.empty')}</div>
           ) : (
             filteredGroups.map((group, gi) => (
               <div key={group.name}>

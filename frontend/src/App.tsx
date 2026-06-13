@@ -56,6 +56,7 @@ import { HotkeySettings } from './components/HotkeySettings';
 import { TabBar } from './components/TabBar';
 import { CommandPalette } from './components/CommandPalette';
 import type { CommandItem } from './types/app';
+import { t } from './i18n';
 
 function App() {
   const [tabs, setTabs] = useState<DocumentState[]>([createEmptyDocument()]);
@@ -70,7 +71,7 @@ function App() {
   const restoredRecentRef = useRef(false);
   const sessionPersistenceReadyRef = useRef(false);
   const lastPersistedSessionRef = useRef('');
-  const [message, setMessage] = useState('Ready');
+  const [message, setMessage] = useState(t('app.ready'));
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState('');
   const [workspaceSearchResults, setWorkspaceSearchResults] = useState<WorkspaceSearchResult[]>([]);
@@ -145,7 +146,7 @@ function App() {
           }
           : item
       )));
-      setMessage(`File was deleted externally. Kept ${tab.name} as an unsaved tab.`);
+      setMessage(t('message.fileDeletedUnsaved', { name: tab.name }));
       return;
     }
 
@@ -155,7 +156,7 @@ function App() {
       setActiveTabIndex(0);
       setOutline([]);
       setShowStartPage(true);
-      setMessage(`Closed missing file ${tab.name}`);
+      setMessage(t('message.closedMissing', { name: tab.name }));
       return;
     }
 
@@ -171,7 +172,7 @@ function App() {
     } else if (currentActiveIdx >= remaining.length) {
       setActiveTabIndex(Math.max(0, remaining.length - 1));
     }
-    setMessage(`Closed missing file ${tab.name}`);
+    setMessage(t('message.closedMissing', { name: tab.name }));
   }, []);
 
   const stats = useMemo(() => calculateStats(activeTab.markdown), [activeTab.markdown]);
@@ -234,7 +235,7 @@ function App() {
           if (payload.lastModified) {
             void WatchFile(payload.path, payload.lastModified);
           }
-          setMessage(`Restored ${payload.name || displayNameFromPath(payload.path)}`);
+          setMessage(t('message.restored', { name: payload.name || displayNameFromPath(payload.path) }));
         } catch {
           // File may have been moved or deleted — clear the stale recent entry
           // so it does not keep blocking restoration on future launches.
@@ -287,7 +288,7 @@ function App() {
       setConfig(saved);
     } catch (error) {
       console.error(error);
-      setMessage('Could not save settings');
+      setMessage(t('message.settingsSaveFailed'));
     }
   }, []);
 
@@ -351,8 +352,8 @@ function App() {
     }
 
     setMessage(restoredTabs.length === 1
-      ? `Restored ${restoredTabs[0].name}`
-      : `Restored ${restoredTabs.length} tabs`);
+      ? t('message.restored', { name: restoredTabs[0].name })
+      : t('message.restoredTabs', { count: restoredTabs.length }));
     return true;
   }
 
@@ -390,7 +391,7 @@ function App() {
     setActiveTabIndex(tabs.length);
     setOutline([]);
     setShowStartPage(false);
-    setMessage('New document');
+    setMessage(t('message.newDocument'));
   }, [tabs.length]);
 
   const handleOpen = useCallback(async () => {
@@ -400,7 +401,7 @@ function App() {
       const existingIndex = tabs.findIndex(t => t.path === payload.path && payload.path !== '');
       if (existingIndex >= 0) {
         setActiveTabIndex(existingIndex);
-        setMessage(`Switched to ${payload.name}`);
+        setMessage(t('message.switchedTo', { name: payload.name }));
         return;
       }
       const newTab = documentFromPayload(payload);
@@ -412,10 +413,10 @@ function App() {
       if (payload.lastModified) {
         void WatchFile(payload.path, payload.lastModified);
       }
-      setMessage(`Opened ${payload.name}`);
+      setMessage(t('message.opened', { name: payload.name }));
     } catch (error) {
       console.error(error);
-      setMessage('Open failed');
+      setMessage(t('message.openFailed'));
     }
   }, [tabs, pushFileNav]);
 
@@ -424,12 +425,12 @@ function App() {
     if (!tab) return;
 
     if (tab.locked) {
-      setMessage('Tab is locked — unlock it first');
+      setMessage(t('message.tabLocked'));
       return;
     }
 
     if (tab.isDirty) {
-      const discard = window.confirm(`"${tab.name}" has unsaved changes. Discard changes?`);
+      const discard = window.confirm(t('confirm.unsavedTab', { name: tab.name }));
       if (!discard) return;
     }
 
@@ -457,7 +458,7 @@ function App() {
       return t?.isDirty && !t?.locked;
     });
     if (dirty.length === 0) return true;
-    return window.confirm(`${dirty.length} tab(s) have unsaved changes. Discard changes?`);
+    return window.confirm(t('confirm.unsavedTabs', { count: dirty.length }));
   };
 
   const handleCloseAll = useCallback(() => {
@@ -514,7 +515,7 @@ function App() {
     const tab = tabs[index];
     if (!tab) return;
     updateTabById(tab.id, t => ({ ...t, locked: !t.locked }));
-    setMessage(tab.locked ? `Unlocked ${tab.name}` : `Locked ${tab.name}`);
+    setMessage(tab.locked ? t('message.unlocked', { name: tab.name }) : t('message.locked', { name: tab.name }));
   }, [tabs, updateTabById]);
 
   const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
@@ -553,7 +554,7 @@ function App() {
         }
       } catch (error) {
         console.error(error);
-        setMessage('Workspace file is unavailable');
+        setMessage(t('message.workspaceFileUnavailable'));
       }
       return;
     }
@@ -570,7 +571,7 @@ function App() {
       }
     } catch (error) {
       console.error(error);
-      setMessage('Workspace file is unavailable');
+      setMessage(t('message.workspaceFileUnavailable'));
     }
   }, [tabs, activeTabIndex, updateActiveTab, pushFileNav]);
 
@@ -594,7 +595,7 @@ function App() {
         }
       } catch (error) {
         console.error(error);
-        setMessage(`Could not open linked file: ${path}`);
+        setMessage(t('message.linkedFileOpenFailed', { path }));
       }
       return;
     }
@@ -611,7 +612,7 @@ function App() {
       }
     } catch (error) {
       console.error(error);
-      setMessage(`Could not open linked file: ${path}`);
+      setMessage(t('message.linkedFileOpenFailed', { path }));
     }
   }, [tabs, activeTabIndex, updateActiveTab, pushFileNav]);
 
@@ -642,17 +643,17 @@ function App() {
         const result = await saveToPath(activeTab.path, activeTab.markdown);
         updateActiveTab((current) => documentAfterSave(current, result));
         void WatchFile(result.path, result.savedAt);
-        setMessage(`Saved ${result.name}`);
+        setMessage(t('message.saved', { name: result.name }));
       } else {
         const result: SaveResult = await SaveDocumentAs(activeTab.markdown);
         if (!result?.path) return;
         updateActiveTab((current) => documentAfterSave(current, result));
         void WatchFile(result.path, result.savedAt);
-        setMessage(`Saved ${result.name}`);
+        setMessage(t('message.saved', { name: result.name }));
       }
     } catch (error) {
       console.error(error);
-      setMessage('Save failed');
+      setMessage(t('message.saveFailed'));
     }
   }, [activeTab.markdown, activeTab.path, saveToPath, updateActiveTab]);
 
@@ -662,10 +663,10 @@ function App() {
       if (!result?.path) return;
       updateActiveTab((current) => documentAfterSave(current, result));
       void WatchFile(result.path, result.savedAt);
-      setMessage(`Saved ${result.name}`);
+      setMessage(t('message.saved', { name: result.name }));
     } catch (error) {
       console.error(error);
-      setMessage('Save as failed');
+      setMessage(t('message.saveAsFailed'));
     }
   }, [activeTab.markdown, updateActiveTab]);
 
@@ -673,10 +674,10 @@ function App() {
     try {
       const html = markdownToExportHtml(activeTab.markdown, activeTab.name, activeTab.path);
       const result = await ExportHTML({ title: activeTab.name, html, sourcePath: activeTab.path });
-      if (result?.path) setMessage(`Exported ${result.name}`);
+      if (result?.path) setMessage(t('message.exported', { name: result.name }));
     } catch (error) {
       console.error(error);
-      setMessage('Export failed');
+      setMessage(t('message.exportFailed'));
     }
   }, [activeTab.markdown, activeTab.name, activeTab.path]);
 
@@ -684,10 +685,10 @@ function App() {
     try {
       const html = markdownToExportHtml(activeTab.markdown, activeTab.name, activeTab.path);
       const result = await ExportPDF({ title: activeTab.name, html, sourcePath: activeTab.path });
-      if (result?.path) setMessage(`Exported PDF ${result.name}`);
+      if (result?.path) setMessage(t('message.exportedPdf', { name: result.name }));
     } catch (error) {
       console.error(error);
-      setMessage('PDF export failed');
+      setMessage(t('message.pdfExportFailed'));
     }
   }, [activeTab.markdown, activeTab.name, activeTab.path]);
 
@@ -698,10 +699,10 @@ function App() {
       setWorkspace({ ...nextWorkspace, files: nextWorkspace.files ?? [] });
       setConfig((current) => ({ ...current, workspacePath: nextWorkspace.rootPath, showSidebar: true }));
       void persistConfig({ workspacePath: nextWorkspace.rootPath, showSidebar: true });
-      setMessage(`Opened folder ${nextWorkspace.name || displayNameFromPath(nextWorkspace.rootPath)}`);
+      setMessage(t('message.openedFolder', { name: nextWorkspace.name || displayNameFromPath(nextWorkspace.rootPath) }));
     } catch (error) {
       console.error(error);
-      setMessage('Open folder failed');
+      setMessage(t('message.openFolderFailed'));
     }
   }, [persistConfig]);
 
@@ -718,7 +719,7 @@ function App() {
     if (!latestConfig.showSidebar || latestConfig.workspacePath !== ws.rootPath) {
       void persistConfig({ showSidebar: true, workspacePath: ws.rootPath });
     }
-    if (!restoredRecentRef.current) setMessage(`Workspace: ${ws.name || displayNameFromPath(ws.rootPath)}`);
+    if (!restoredRecentRef.current) setMessage(t('message.workspace', { name: ws.name || displayNameFromPath(ws.rootPath) }));
   }, [persistConfig]);
 
   const handleToggleSidebar = useCallback(() => {
@@ -759,34 +760,34 @@ function App() {
     try {
       const ws = await ScanFolder(workspace.rootPath);
       setWorkspace({ ...ws, files: ws.files ?? [] });
-      setMessage('Workspace refreshed');
+      setMessage(t('message.workspaceRefreshed'));
     } catch (error) {
       console.error(error);
-      setMessage('Failed to refresh workspace');
+      setMessage(t('message.workspaceRefreshFailed'));
     }
   }, [workspace?.rootPath]);
 
   const handleCreateWorkspaceFile = useCallback(async (parentDir: string) => {
-    const name = window.prompt('Enter file name:');
+    const name = window.prompt(t('prompt.fileName'));
     if (!name) return;
     try {
       await CreateWorkspaceFile(parentDir, name);
       await handleRefreshWorkspace();
     } catch (error) {
       console.error(error);
-      setMessage(`Failed to create file: ${error}`);
+      setMessage(t('message.createFileFailed', { error: String(error) }));
     }
   }, [handleRefreshWorkspace]);
 
   const handleCreateWorkspaceFolder = useCallback(async (parentDir: string) => {
-    const name = window.prompt('Enter folder name:');
+    const name = window.prompt(t('prompt.folderName'));
     if (!name) return;
     try {
       await CreateWorkspaceFolder(parentDir, name);
       await handleRefreshWorkspace();
     } catch (error) {
       console.error(error);
-      setMessage(`Failed to create folder: ${error}`);
+      setMessage(t('message.createFolderFailed', { error: String(error) }));
     }
   }, [handleRefreshWorkspace]);
 
@@ -833,10 +834,10 @@ function App() {
       }
 
       await handleRefreshWorkspace();
-      setMessage(`已移到回收站: ${name}`);
+      setMessage(t('message.deleted', { name }));
     } catch (error) {
       console.error(error);
-      setMessage(`删除失败: ${error}`);
+      setMessage(t('message.deleteFailed', { error: String(error) }));
     }
   }, [handleRefreshWorkspace]);
 
@@ -862,10 +863,10 @@ function App() {
       }));
 
       await handleRefreshWorkspace();
-      setMessage(`重命名成功: ${newName}`);
+      setMessage(t('message.renamed', { name: newName }));
     } catch (error) {
       console.error(error);
-      setMessage(`重命名失败: ${error}`);
+      setMessage(t('message.renameFailed', { error: String(error) }));
     }
   }, [handleRefreshWorkspace]);
 
@@ -890,10 +891,10 @@ function App() {
         return t;
       }));
       await handleRefreshWorkspace();
-      setMessage(`移动成功: ${result.name}`);
+      setMessage(t('message.moved', { name: result.name }));
     } catch (error) {
       console.error(error);
-      setMessage(`移动失败: ${error}`);
+      setMessage(t('message.moveFailed', { error: String(error) }));
     }
   }, [handleRefreshWorkspace]);
 
@@ -914,7 +915,7 @@ function App() {
         : removeRecentDocument(config, item.path, item.type);
       setConfig(nextConfig);
       void persistConfigWith(() => nextConfig);
-      setMessage('Recent item is unavailable');
+      setMessage(t('message.recentUnavailable'));
     }
   }, [config, handleOpenLocalFile, handleWorkspaceLoaded, persistConfigWith]);
 
@@ -924,13 +925,13 @@ function App() {
       : false;
     const restoredGlobal = restoredCurrent ? true : await restoreSessionTabs(config, '');
     if (!restoredGlobal) {
-      setMessage('No saved session to restore');
+      setMessage(t('message.noSavedSession'));
     }
   }, [config, currentWorkspacePath]);
 
   const handleOpenWorkspaceSearch = useCallback(() => {
     if (!workspace?.rootPath) {
-      setMessage('Open a folder before searching');
+      setMessage(t('message.openFolderBeforeSearch'));
       return;
     }
     setWorkspaceSearchOpen(true);
@@ -940,7 +941,7 @@ function App() {
     setWorkspaceSearchOpen(false);
     setWorkspaceSearchQuery('');
     void handleOpenWorkspaceFile(result.path).then(() => {
-      setMessage(`Opened ${result.name} at line ${result.line}`);
+      setMessage(t('message.openedAtLine', { name: result.name, line: result.line }));
     });
   }, [handleOpenWorkspaceFile]);
 
@@ -1011,7 +1012,7 @@ function App() {
           if (cancelled) return;
           console.error(error);
           setWorkspaceSearchResults([]);
-          setMessage('Workspace search failed');
+          setMessage(t('message.workspaceSearchFailed'));
         })
         .finally(() => {
           if (!cancelled) setWorkspaceSearchLoading(false);
@@ -1060,39 +1061,39 @@ function App() {
   // ── Command palette ──
   const commands: CommandItem[] = useMemo(() => [
     // File
-    { id: 'new', label: 'New Document', description: 'Create a new document', category: 'file', action: handleNew, hotkeyLabel: 'Ctrl+N' },
-    { id: 'open', label: 'Open File', description: 'Open a Markdown file', category: 'file', action: handleOpen, hotkeyLabel: 'Ctrl+O' },
-    { id: 'save', label: 'Save', description: 'Save current document', category: 'file', action: handleSave, hotkeyLabel: 'Ctrl+S' },
-    { id: 'save-as', label: 'Save As', description: 'Save as a new file', category: 'file', action: handleSaveAs, hotkeyLabel: 'Ctrl+Shift+S' },
-    { id: 'open-folder', label: 'Open Folder', description: 'Open a workspace folder', category: 'file', action: handleOpenFolder },
-    { id: 'export-html', label: 'Export HTML', description: 'Export document as HTML', category: 'file', action: handleExport, hotkeyLabel: 'Ctrl+Shift+E' },
-    { id: 'export-pdf', label: 'Export PDF', description: 'Export document as PDF', category: 'file', action: handleExportPdf, hotkeyLabel: 'Ctrl+Shift+P' },
+    { id: 'new', label: t('command.new.label'), description: t('command.new.description'), category: 'file', action: handleNew, hotkeyLabel: 'Ctrl+N' },
+    { id: 'open', label: t('command.open.label'), description: t('command.open.description'), category: 'file', action: handleOpen, hotkeyLabel: 'Ctrl+O' },
+    { id: 'save', label: t('command.save.label'), description: t('command.save.description'), category: 'file', action: handleSave, hotkeyLabel: 'Ctrl+S' },
+    { id: 'save-as', label: t('command.saveAs.label'), description: t('command.saveAs.description'), category: 'file', action: handleSaveAs, hotkeyLabel: 'Ctrl+Shift+S' },
+    { id: 'open-folder', label: t('command.openFolder.label'), description: t('command.openFolder.description'), category: 'file', action: handleOpenFolder },
+    { id: 'export-html', label: t('command.exportHtml.label'), description: t('command.exportHtml.description'), category: 'file', action: handleExport, hotkeyLabel: 'Ctrl+Shift+E' },
+    { id: 'export-pdf', label: t('command.exportPdf.label'), description: t('command.exportPdf.description'), category: 'file', action: handleExportPdf, hotkeyLabel: 'Ctrl+Shift+P' },
     // Edit
-    { id: 'find', label: 'Find', description: 'Search in document', category: 'edit', action: handleFindAction, hotkeyLabel: 'Ctrl+F' },
-    { id: 'workspace-search', label: 'Search Workspace', description: 'Search all Markdown files in the current folder', category: 'edit', action: handleOpenWorkspaceSearch, hotkeyLabel: 'Ctrl+Shift+F' },
+    { id: 'find', label: t('command.find.label'), description: t('command.find.description'), category: 'edit', action: handleFindAction, hotkeyLabel: 'Ctrl+F' },
+    { id: 'workspace-search', label: t('command.workspaceSearch.label'), description: t('command.workspaceSearch.description'), category: 'edit', action: handleOpenWorkspaceSearch, hotkeyLabel: 'Ctrl+Shift+F' },
     // Format
-    { id: 'bold', label: 'Bold', description: 'Toggle bold text', category: 'format', action: () => editor?.chain().focus().toggleBold().run(), hotkeyLabel: 'Ctrl+B' },
-    { id: 'italic', label: 'Italic', description: 'Toggle italic text', category: 'format', action: () => editor?.chain().focus().toggleItalic().run(), hotkeyLabel: 'Ctrl+I' },
-    { id: 'heading1', label: 'Heading 1', description: 'Toggle heading level 1', category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(), hotkeyLabel: 'Ctrl+1' },
-    { id: 'heading2', label: 'Heading 2', description: 'Toggle heading level 2', category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), hotkeyLabel: 'Ctrl+2' },
-    { id: 'heading3', label: 'Heading 3', description: 'Toggle heading level 3', category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), hotkeyLabel: 'Ctrl+3' },
-    { id: 'link', label: 'Insert Link', description: 'Insert or edit a link', category: 'format', action: handleLinkAction, hotkeyLabel: 'Ctrl+K' },
-    { id: 'code', label: 'Inline Code', description: 'Toggle inline code', category: 'format', action: () => editor?.chain().focus().toggleCode().run(), hotkeyLabel: 'Ctrl+Shift+`' },
-    { id: 'bullet-list', label: 'Bullet List', description: 'Toggle bullet list', category: 'format', action: () => editor?.chain().focus().toggleBulletList().run() },
-    { id: 'ordered-list', label: 'Ordered List', description: 'Toggle ordered list', category: 'format', action: () => editor?.chain().focus().toggleOrderedList().run() },
-    { id: 'task-list', label: 'Task List', description: 'Toggle task list', category: 'format', action: () => editor?.chain().focus().toggleTaskList().run() },
-    { id: 'blockquote', label: 'Blockquote', description: 'Toggle blockquote', category: 'format', action: () => editor?.chain().focus().toggleBlockquote().run() },
-    { id: 'code-block', label: 'Code Block', description: 'Insert code block', category: 'format', action: () => editor?.chain().focus().setCodeBlock().run() },
-    { id: 'table', label: 'Insert Table', description: 'Insert a 3x3 table', category: 'format', action: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+    { id: 'bold', label: t('command.bold.label'), description: t('command.bold.description'), category: 'format', action: () => editor?.chain().focus().toggleBold().run(), hotkeyLabel: 'Ctrl+B' },
+    { id: 'italic', label: t('command.italic.label'), description: t('command.italic.description'), category: 'format', action: () => editor?.chain().focus().toggleItalic().run(), hotkeyLabel: 'Ctrl+I' },
+    { id: 'heading1', label: t('command.heading1.label'), description: t('command.heading1.description'), category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(), hotkeyLabel: 'Ctrl+1' },
+    { id: 'heading2', label: t('command.heading2.label'), description: t('command.heading2.description'), category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), hotkeyLabel: 'Ctrl+2' },
+    { id: 'heading3', label: t('command.heading3.label'), description: t('command.heading3.description'), category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), hotkeyLabel: 'Ctrl+3' },
+    { id: 'link', label: t('command.link.label'), description: t('command.link.description'), category: 'format', action: handleLinkAction, hotkeyLabel: 'Ctrl+K' },
+    { id: 'code', label: t('command.inlineCode.label'), description: t('command.inlineCode.description'), category: 'format', action: () => editor?.chain().focus().toggleCode().run(), hotkeyLabel: 'Ctrl+Shift+`' },
+    { id: 'bullet-list', label: t('command.bulletList.label'), description: t('command.bulletList.description'), category: 'format', action: () => editor?.chain().focus().toggleBulletList().run() },
+    { id: 'ordered-list', label: t('command.orderedList.label'), description: t('command.orderedList.description'), category: 'format', action: () => editor?.chain().focus().toggleOrderedList().run() },
+    { id: 'task-list', label: t('command.taskList.label'), description: t('command.taskList.description'), category: 'format', action: () => editor?.chain().focus().toggleTaskList().run() },
+    { id: 'blockquote', label: t('command.blockquote.label'), description: t('command.blockquote.description'), category: 'format', action: () => editor?.chain().focus().toggleBlockquote().run() },
+    { id: 'code-block', label: t('command.codeBlock.label'), description: t('command.codeBlock.description'), category: 'format', action: () => editor?.chain().focus().setCodeBlock().run() },
+    { id: 'table', label: t('command.table.label'), description: t('command.table.description'), category: 'format', action: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
     // View
-    { id: 'toggle-sidebar', label: 'Toggle Sidebar', description: 'Show or hide the sidebar', category: 'view', action: handleToggleSidebar, hotkeyLabel: 'Ctrl+Shift+B' },
-    { id: 'toggle-outline', label: 'Toggle Outline', description: 'Show or hide the outline', category: 'view', action: handleToggleOutline, hotkeyLabel: 'Ctrl+Shift+O' },
-    { id: 'toggle-editor-mode', label: 'Toggle Editor Mode', description: 'Switch between WYSIWYG and source mode', category: 'view', action: handleToggleEditorMode, hotkeyLabel: 'Ctrl+Shift+M' },
-    { id: 'toggle-theme', label: 'Toggle Theme', description: 'Switch between light and dark theme', category: 'view', action: handleToggleTheme },
+    { id: 'toggle-sidebar', label: t('command.toggleSidebar.label'), description: t('command.toggleSidebar.description'), category: 'view', action: handleToggleSidebar, hotkeyLabel: 'Ctrl+Shift+B' },
+    { id: 'toggle-outline', label: t('command.toggleOutline.label'), description: t('command.toggleOutline.description'), category: 'view', action: handleToggleOutline, hotkeyLabel: 'Ctrl+Shift+O' },
+    { id: 'toggle-editor-mode', label: t('command.toggleEditorMode.label'), description: t('command.toggleEditorMode.description'), category: 'view', action: handleToggleEditorMode, hotkeyLabel: 'Ctrl+Shift+M' },
+    { id: 'toggle-theme', label: t('command.toggleTheme.label'), description: t('command.toggleTheme.description'), category: 'view', action: handleToggleTheme },
     // Tab
-    { id: 'close-tab', label: 'Close Tab', description: 'Close the current tab', category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
-    { id: 'next-tab', label: 'Next Tab', description: 'Switch to next tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
-    { id: 'prev-tab', label: 'Previous Tab', description: 'Switch to previous tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length), hotkeyLabel: 'Ctrl+Shift+Tab' },
+    { id: 'close-tab', label: t('command.closeTab.label'), description: t('command.closeTab.description'), category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
+    { id: 'next-tab', label: t('command.nextTab.label'), description: t('command.nextTab.description'), category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
+    { id: 'prev-tab', label: t('command.prevTab.label'), description: t('command.prevTab.description'), category: 'tab', action: () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length), hotkeyLabel: 'Ctrl+Shift+Tab' },
   ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, handleOpenWorkspaceSearch, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length]);
 
   // ── Keep action dispatcher ref in sync ──
@@ -1199,7 +1200,7 @@ function App() {
         void WatchFile(result.path, result.savedAt);
       }).catch((error) => {
         console.error(error);
-        setMessage('Auto save failed');
+        setMessage(t('message.autoSaveFailed'));
       });
     }, config.autoSaveDelay);
     return () => window.clearTimeout(timeout);
@@ -1231,7 +1232,7 @@ function App() {
 
       if (tab.isDirty) {
         const reload = window.confirm(
-          `"${tab.name}" has been modified externally.\n\nDo you want to reload it? Your unsaved changes will be lost.`
+          t('confirm.externalChange', { name: tab.name })
         );
         if (!reload) {
           // User chose to keep local version — re-watch with new mod time so we don't keep prompting
@@ -1250,7 +1251,7 @@ function App() {
           const idx = currentTabsAfter.findIndex(t => t.path === path);
           if (idx === -1) return;
           setTabs(prev => prev.map(t => t.path === path ? documentFromPayload(payload) : t));
-          setMessage(`Reloaded ${payload.name} (external change)`);
+          setMessage(t('message.reloadedExternal', { name: payload.name }));
           // Re-watch with the new mod time
           if (payload.lastModified) {
             void WatchFile(path, payload.lastModified);
@@ -1262,7 +1263,7 @@ function App() {
             handleUnavailableFile(path);
             return;
           }
-          setMessage(`Failed to reload ${path}`);
+          setMessage(t('message.reloadFailed', { path }));
         });
     });
 

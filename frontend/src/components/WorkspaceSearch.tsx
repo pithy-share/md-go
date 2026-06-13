@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react';
 import type { WorkspaceSearchResult } from '../types/app';
+import { t } from '../i18n';
 
 interface WorkspaceSearchProps {
   open: boolean;
@@ -33,25 +34,25 @@ export function WorkspaceSearch({
             autoFocus
             className="workspace-search-input"
             value={query}
-            placeholder={workspaceName ? `Search ${workspaceName}` : 'Open a folder to search'}
+            placeholder={workspaceName ? t('search.placeholder', { name: workspaceName }) : t('search.placeholderNoWorkspace')}
             onChange={(event) => onQueryChange(event.currentTarget.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') onClose();
             }}
             disabled={!workspaceName}
           />
-          <button type="button" className="workspace-search-close" onClick={onClose} aria-label="Close search">
+          <button type="button" className="workspace-search-close" onClick={onClose} aria-label={t('search.close')}>
             <X size={17} />
           </button>
         </header>
         <div className="workspace-search-meta">
-          {loading ? 'Searching...' : query.trim() ? `${results.length} result(s)` : 'Type to search Markdown files'}
+          {loading ? t('search.loading') : query.trim() ? t('search.resultCount', { count: results.length }) : t('search.typeToSearch')}
         </div>
         <div className="workspace-search-results">
           {!workspaceName ? (
-            <div className="workspace-search-empty">Open a folder before searching.</div>
+            <div className="workspace-search-empty">{t('search.openFolderFirst')}</div>
           ) : query.trim() && !loading && results.length === 0 ? (
-            <div className="workspace-search-empty">No matches</div>
+            <div className="workspace-search-empty">{t('search.noMatches')}</div>
           ) : (
             results.map((result) => (
               <button
@@ -61,7 +62,7 @@ export function WorkspaceSearch({
                 onClick={() => onOpenResult(result)}
               >
                 <span className="workspace-search-result-path">{result.relativePath}</span>
-                <span className="workspace-search-result-line">Line {result.line}</span>
+                <span className="workspace-search-result-line">{t('search.line', { line: result.line })}</span>
                 <span className="workspace-search-result-snippet">{result.snippet}</span>
               </button>
             ))

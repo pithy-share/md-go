@@ -1,9 +1,7 @@
 import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, EditorMode, RecentDocument, SaveResult, ThemePreference, WorkspaceSessionState } from '../types/app';
+import { t } from '../i18n';
 
-export const defaultMarkdown = `# Untitled
-
-Start writing in Markdown. Use shortcuts like #, -, 1., > and fenced code blocks.
-`;
+export const defaultMarkdown = t('document.defaultMarkdown');
 
 export const defaultConfig: AppConfig = {
   theme: 'system',
@@ -162,7 +160,7 @@ export function createEmptyDocument(): DocumentState {
   return {
     id: crypto.randomUUID(),
     path: '',
-    name: 'Untitled.md',
+    name: t('document.untitled'),
     markdown: defaultMarkdown,
     isDirty: false,
     locked: false,
@@ -175,7 +173,7 @@ export function documentFromPayload(payload: DocumentPayload): DocumentState {
   return {
     id: crypto.randomUUID(),
     path: payload.path,
-    name: payload.name || 'Untitled.md',
+    name: payload.name || t('document.untitled'),
     markdown: payload.content || '',
     isDirty: false,
     locked: false,
@@ -230,6 +228,6 @@ export function resolveTheme(theme: AppConfig['theme']) {
 }
 
 export function displayNameFromPath(path: string) {
-  if (!path) return 'Untitled.md';
+  if (!path) return t('document.untitled');
   return path.split(/[\\/]/).pop() || path;
 }

@@ -1,5 +1,6 @@
 import { FilePlus, FolderOpen, RotateCcw, Search, FileText } from 'lucide-react';
 import type { RecentDocument } from '../types/app';
+import { t } from '../i18n';
 
 interface StartPageProps {
   recentDocuments: RecentDocument[];
@@ -29,35 +30,35 @@ export function StartPage({
       <section className="start-main">
         <div className="start-title">
           <h1>MD Go</h1>
-          <p>{workspaceName ? `Workspace: ${workspaceName}` : 'Markdown workspace'}</p>
+          <p>{workspaceName ? t('start.workspace', { name: workspaceName }) : t('start.markdownWorkspace')}</p>
         </div>
         <div className="start-actions">
           <button type="button" className="start-action primary" onClick={onNew}>
             <FilePlus size={18} />
-            <span>New document</span>
+            <span>{t('start.newDocument')}</span>
           </button>
           <button type="button" className="start-action" onClick={onOpenFile}>
             <FileText size={18} />
-            <span>Open file</span>
+            <span>{t('start.openFile')}</span>
           </button>
           <button type="button" className="start-action" onClick={onOpenFolder}>
             <FolderOpen size={18} />
-            <span>Open folder</span>
+            <span>{t('start.openFolder')}</span>
           </button>
           <button type="button" className="start-action" onClick={onSearchWorkspace} disabled={!workspaceName}>
             <Search size={18} />
-            <span>Search workspace</span>
+            <span>{t('start.searchWorkspace')}</span>
           </button>
           <button type="button" className="start-action" onClick={onRestoreSession} disabled={!canRestoreSession}>
             <RotateCcw size={18} />
-            <span>Restore session</span>
+            <span>{t('start.restoreSession')}</span>
           </button>
         </div>
       </section>
       <section className="start-recent">
-        <div className="start-section-title">Recent</div>
+        <div className="start-section-title">{t('start.recent')}</div>
         {recentDocuments.length === 0 ? (
-          <div className="start-empty">No recent files or folders</div>
+          <div className="start-empty">{t('start.noRecent')}</div>
         ) : (
           <div className="start-recent-list">
             {recentDocuments.map((item) => (
@@ -68,7 +69,7 @@ export function StartPage({
                 onClick={() => onOpenRecent(item)}
                 title={item.path}
               >
-                <span className="start-recent-kind">{item.type === 'folder' ? 'Folder' : 'File'}</span>
+                <span className="start-recent-kind">{item.type === 'folder' ? t('start.kindFolder') : t('start.kindFile')}</span>
                 <span className="start-recent-name">{item.name}</span>
                 <span className="start-recent-path">{item.path}</span>
               </button>

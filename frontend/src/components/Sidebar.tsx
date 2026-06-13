@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FilePlus, FileText, Folder, FolderOpen, FolderPlus, ListTree, Pencil, Trash2 } from 'lucide-react';
 import type { OutlineItem, Workspace, WorkspaceFile } from '../types/app';
+import { t } from '../i18n';
 
 interface SidebarProps {
   currentPath: string;
@@ -182,14 +183,14 @@ export function Sidebar({
         <div className="sidebar-heading sidebar-heading-row">
           <div className="sidebar-heading-title">
             <Folder size={15} />
-            <span>{workspace?.name || 'Workspace'}</span>
+            <span>{workspace?.name || t('workspace.titleFallback')}</span>
           </div>
           <div className="sidebar-heading-actions">
             <button
               type="button"
               className="sidebar-action-button"
-              title="全部展开"
-              aria-label="全部展开"
+              title={t('workspace.expandAll')}
+              aria-label={t('workspace.expandAll')}
               onClick={handleExpandAll}
               disabled={!workspace || allFolderIds.length === 0}
             >
@@ -198,8 +199,8 @@ export function Sidebar({
             <button
               type="button"
               className="sidebar-action-button"
-              title="全部折叠"
-              aria-label="全部折叠"
+              title={t('workspace.collapseAll')}
+              aria-label={t('workspace.collapseAll')}
               onClick={handleCollapseAll}
               disabled={!workspace || allFolderIds.length === 0}
             >
@@ -211,7 +212,7 @@ export function Sidebar({
           <input
             type="text"
             className="sidebar-search-input"
-            placeholder="Search files..."
+            placeholder={t('workspace.searchFiles')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.currentTarget.value)}
             spellCheck={false}
@@ -219,9 +220,9 @@ export function Sidebar({
         </div>
         <div className="sidebar-list tree-list">
           {!workspace ? (
-            <div className="empty-state">No folder open</div>
+            <div className="empty-state">{t('workspace.noFolder')}</div>
           ) : displayTree.length === 0 ? (
-            <div className="empty-state">{isSearching ? 'No matching files' : 'No Markdown files'}</div>
+            <div className="empty-state">{isSearching ? t('workspace.noMatches') : t('workspace.noMarkdown')}</div>
           ) : (
             <WorkspaceTree
               currentPath={currentPath}
@@ -259,7 +260,7 @@ export function Sidebar({
                 })}
               >
                 <FilePlus size={14} />
-                新建文件
+                {t('workspace.newFile')}
               </button>
               <button
                 className="sidebar-context-menu-item"
@@ -269,7 +270,7 @@ export function Sidebar({
                 })}
               >
                 <FolderPlus size={14} />
-                新建文件夹
+                {t('workspace.newFolder')}
               </button>
             </>
           )}
@@ -278,7 +279,7 @@ export function Sidebar({
             onClick={() => executeMenuAction(() => handleRenameStart(contextMenu.item))}
           >
             <Pencil size={14} />
-            重命名
+            {t('workspace.rename')}
           </button>
           <button
             className="sidebar-context-menu-item danger"
@@ -286,7 +287,7 @@ export function Sidebar({
               setContextMenu(null);
               const item = contextMenu.item;
               const itemName = item.type === 'file' ? item.file.name : item.name;
-              if (window.confirm(`确定要删除 "${itemName}" 吗？此操作不可撤销。`)) {
+              if (window.confirm(t('workspace.deleteConfirm', { name: itemName }))) {
                 const path = getItemPath(item);
                 const isDir = item.type === 'folder';
                 onFileDeleted(path + (isDir ? '|dir|' : ''));
@@ -294,7 +295,7 @@ export function Sidebar({
             }}
           >
             <Trash2 size={14} />
-            删除
+            {t('workspace.delete')}
           </button>
         </div>
       )}
@@ -308,11 +309,11 @@ export function OutlinePanel({ outline, onJumpToHeading }: OutlinePanelProps) {
       <section className="sidebar-section outline-section">
         <div className="sidebar-heading">
           <ListTree size={15} />
-          <span>Outline</span>
+          <span>{t('outline.title')}</span>
         </div>
         <div className="sidebar-list">
           {outline.length === 0 ? (
-            <div className="empty-state">No headings</div>
+            <div className="empty-state">{t('outline.empty')}</div>
           ) : (
             outline.map((item) => (
               <button

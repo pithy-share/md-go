@@ -1,5 +1,6 @@
 import { Circle, CircleCheck, FilePenLine } from 'lucide-react';
 import type { DocumentStats } from '../types/app';
+import { t } from '../i18n';
 
 interface StatusBarProps {
   path: string;
@@ -9,18 +10,23 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ path, isDirty, lastSavedAt, stats }: StatusBarProps) {
-  const savedLabel = isDirty ? 'Unsaved' : lastSavedAt ? `Saved ${formatTime(lastSavedAt)}` : 'Saved';
+  const title = path || t('document.untitled');
+  const savedLabel = isDirty
+    ? t('status.unsaved')
+    : lastSavedAt
+      ? t('status.savedAt', { time: formatTime(lastSavedAt) })
+      : t('status.saved');
 
   return (
     <footer className="statusbar">
-      <div className="statusbar-section path-section" title={path || 'Untitled.md'}>
+      <div className="statusbar-section path-section" title={title}>
         <FilePenLine size={14} />
-        <span>{path || 'Untitled.md'}</span>
+        <span>{title}</span>
       </div>
       <div className="statusbar-section">
-        <span>{stats.words} words</span>
-        <span>{stats.characters} chars</span>
-        <span>{stats.lines} lines</span>
+        <span>{t('status.words', { count: stats.words })}</span>
+        <span>{t('status.characters', { count: stats.characters })}</span>
+        <span>{t('status.lines', { count: stats.lines })}</span>
       </div>
       <div className="statusbar-section save-section">
         {isDirty ? <Circle size={10} className="dirty-dot" /> : <CircleCheck size={14} className="saved-dot" />}

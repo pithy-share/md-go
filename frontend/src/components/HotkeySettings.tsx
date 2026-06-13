@@ -2,12 +2,40 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, X, RotateCcw } from 'lucide-react';
 import { LoadHotkeys, ResetHotkeys, SaveHotkeys } from '../../wailsjs/go/main/App';
 import type { HotkeyBinding } from '../types/app';
+import { t, type I18nKey } from '../i18n';
 
 interface HotkeySettingsProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (bindings: HotkeyBinding[]) => void;
 }
+
+const hotkeyLabelKeys: Record<string, I18nKey> = {
+  save: 'command.save.label',
+  open: 'command.open.label',
+  new: 'command.new.label',
+  export: 'command.exportHtml.label',
+  'export-html': 'command.exportHtml.label',
+  'export-pdf': 'command.exportPdf.label',
+  'save-as': 'command.saveAs.label',
+  'open-folder': 'command.openFolder.label',
+  'close-tab': 'command.closeTab.label',
+  'next-tab': 'command.nextTab.label',
+  'prev-tab': 'command.prevTab.label',
+  bold: 'command.bold.label',
+  italic: 'command.italic.label',
+  heading1: 'command.heading1.label',
+  heading2: 'command.heading2.label',
+  heading3: 'command.heading3.label',
+  link: 'command.link.label',
+  'inline-code': 'command.inlineCode.label',
+  find: 'command.find.label',
+  'workspace-search': 'command.workspaceSearch.label',
+  'toggle-sidebar': 'command.toggleSidebar.label',
+  'toggle-outline': 'command.toggleOutline.label',
+  'toggle-editor-mode': 'command.toggleEditorMode.label',
+  'toggle-theme': 'command.toggleTheme.label',
+};
 
 export function HotkeySettings({ isOpen, onClose, onSaved }: HotkeySettingsProps) {
   const [bindings, setBindings] = useState<HotkeyBinding[]>([]);
@@ -106,10 +134,12 @@ export function HotkeySettings({ isOpen, onClose, onSaved }: HotkeySettingsProps
 
   const categoryLabel = (cat: string) => {
     const labels: Record<string, string> = {
-      file: 'File',
-      edit: 'Edit',
-      format: 'Format',
-      view: 'View',
+      file: t('category.file'),
+      edit: t('category.edit'),
+      format: t('category.format'),
+      view: t('category.view'),
+      tab: t('category.tab'),
+      other: t('category.other'),
     };
     return labels[cat] || cat;
   };
@@ -121,24 +151,24 @@ export function HotkeySettings({ isOpen, onClose, onSaved }: HotkeySettingsProps
       <div className="hotkey-settings" onClick={(e) => e.stopPropagation()}>
         <div className="hotkey-settings-header">
           <Keyboard size={18} />
-          <span>Keyboard Shortcuts</span>
-          <button className="hotkey-close-btn" title="Close" onClick={onClose}>
+          <span>{t('hotkeys.title')}</span>
+          <button className="hotkey-close-btn" title={t('hotkeys.close')} onClick={onClose}>
             <X size={16} />
           </button>
         </div>
 
         <div className="hotkey-settings-body">
           {loading ? (
-            <div className="empty-state">Loading...</div>
+            <div className="empty-state">{t('hotkeys.loading')}</div>
           ) : categories.length === 0 ? (
-            <div className="empty-state">No shortcuts configured</div>
+            <div className="empty-state">{t('hotkeys.empty')}</div>
           ) : (
             categories.map(([cat, items]) => (
               <div key={cat} className="hotkey-category">
                 <div className="hotkey-category-title">{categoryLabel(cat)}</div>
                 {items.map((binding) => (
                   <div key={binding.id} className="hotkey-row">
-                    <span className="hotkey-label">{binding.label}</span>
+                    <span className="hotkey-label">{hotkeyLabel(binding)}</span>
                     <button
                       ref={recordingId === binding.id ? recordRef : undefined}
                       className={`hotkey-combo ${recordingId === binding.id ? 'recording' : ''}`}
@@ -146,7 +176,7 @@ export function HotkeySettings({ isOpen, onClose, onSaved }: HotkeySettingsProps
                       disabled={!binding.enabled}
                     >
                       {recordingId === binding.id ? (
-                        <span className="hotkey-recording-hint">Press shortcut...</span>
+                        <span className="hotkey-recording-hint">{t('hotkeys.pressShortcut')}</span>
                       ) : binding.enabled ? (
                         formatKeyCombo(binding)
                       ) : (
@@ -163,19 +193,24 @@ export function HotkeySettings({ isOpen, onClose, onSaved }: HotkeySettingsProps
         <div className="hotkey-settings-footer">
           <button className="hotkey-btn hotkey-btn-danger" onClick={handleReset}>
             <RotateCcw size={14} />
-            Reset All
+            {t('hotkeys.resetAll')}
           </button>
           <div className="hotkey-footer-spacer" />
           <button className="hotkey-btn" onClick={onClose}>
-            Cancel
+            {t('hotkeys.cancel')}
           </button>
           <button className="hotkey-btn hotkey-btn-primary" onClick={handleSave} disabled={!dirty || loading}>
-            Save
+            {t('hotkeys.save')}
           </button>
         </div>
       </div>
     </div>
   );
+}
+
+function hotkeyLabel(binding: HotkeyBinding): string {
+  const key = hotkeyLabelKeys[binding.id] || hotkeyLabelKeys[binding.action];
+  return key ? t(key) : binding.label;
 }
 
 function formatKeyCombo(binding: HotkeyBinding): string {
