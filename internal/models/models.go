@@ -89,6 +89,25 @@ type HotkeyBinding struct {
 	Category string `json:"category"`
 }
 
+// CreateWorkspaceItemPayload describes the input for creating a file or folder.
+type CreateWorkspaceItemPayload struct {
+	ParentDir string `json:"parentDir"`
+	Name      string `json:"name"`
+	IsFolder  bool   `json:"isFolder"`
+}
+
+// DeleteWorkspacePayload describes the input for deleting a file or folder.
+type DeleteWorkspacePayload struct {
+	Path  string `json:"path"`
+	IsDir bool   `json:"isDir"`
+}
+
+// RenameWorkspacePayload describes the input for renaming a file or folder.
+type RenameWorkspacePayload struct {
+	OldPath string `json:"oldPath"`
+	NewName string `json:"newName"`
+}
+
 // DefaultHotkeys returns the factory-default hotkey bindings.
 func DefaultHotkeys() []HotkeyBinding {
 	return []HotkeyBinding{

@@ -19,6 +19,9 @@ import {
 } from './state/documentStore';
 import type { AppConfig, DocumentPayload, DocumentState, EditorMode, HotkeyBinding, OutlineItem, RecentDocument, SaveResult, Workspace } from './types/app';
 import {
+  CreateWorkspaceFile,
+  CreateWorkspaceFolder,
+  DeleteWorkspaceItem,
   ExportHTML,
   ExportPDF,
   LoadConfig,
@@ -26,6 +29,7 @@ import {
   OpenDocument,
   OpenFolder,
   ReadDocument,
+  RenameWorkspaceItem,
   SaveConfig,
   SaveDocument,
   SaveDocumentAs,
@@ -77,6 +81,8 @@ function App() {
   // ── External file change detection ──
   const tabsRef = useRef<DocumentState[]>(tabs);
   tabsRef.current = tabs;
+  const activeTabIndexRef = useRef(activeTabIndex);
+  activeTabIndexRef.current = activeTabIndex;
 
   const pushFileNav = useCallback((path: string) => {
     const { history, index } = fileNavRef.current;
@@ -549,6 +555,148 @@ function App() {
     void persistConfig({ autoSave: enabled });
   }, [persistConfig]);
 
+  const handleRefreshWorkspace = useCallback(async () => {
+    if (!workspace?.rootPath) return;
+    try {
+      const ws = await ScanFolder(workspace.rootPath);
+      setWorkspace({ ...ws, files: ws.files ?? [] });
+      setMessage('Workspace refreshed');
+    } catch (error) {
+      console.error(error);
+      setMessage('Failed to refresh workspace');
+    }
+  }, [workspace?.rootPath]);
+
+  const handleCreateWorkspaceFile = useCallback(async (parentDir: string) => {
+    const name = window.prompt('Enter file name:');
+    if (!name) return;
+    try {
+      await CreateWorkspaceFile(parentDir, name);
+      await handleRefreshWorkspace();
+    } catch (error) {
+      console.error(error);
+      setMessage(`Failed to create file: ${error}`);
+    }
+  }, [handleRefreshWorkspace]);
+
+  const handleCreateWorkspaceFolder = useCallback(async (parentDir: string) => {
+    const name = window.prompt('Enter folder name:');
+    if (!name) return;
+    try {
+      await CreateWorkspaceFolder(parentDir, name);
+      await handleRefreshWorkspace();
+    } catch (error) {
+      console.error(error);
+      setMessage(`Failed to create folder: ${error}`);
+    }
+  }, [handleRefreshWorkspace]);
+
+  const handleDeleteWorkspaceItem = useCallback(async (rawPath: string) => {
+    const isDir = rawPath.endsWith('|dir|');
+    const path = isDir ? rawPath.slice(0, -5) : rawPath;
+
+    const name = path.split(/[/\\]/).pop() || path;
+
+    // Confirm is already handled in Sidebar's context menu
+    try {
+      await DeleteWorkspaceItem(path, isDir);
+
+      // Close any tabs that point to this file or inside this directory
+      const currentTabs = tabsRef.current;
+      const remaining = currentTabs.filter(t => {
+        if (!t.path) return true;
+        if (isDir) return !t.path.startsWith(path + '/') && !t.path.startsWith(path + '\\');
+        return t.path !== path;
+      });
+
+      if (remaining.length === 0) {
+        setTabs([createEmptyDocument()]);
+        setActiveTabIndex(0);
+        setOutline([]);
+      } else {
+        setTabs(remaining);
+        // Check if active tab was removed
+        const currentActiveIdx = activeTabIndexRef.current;
+        const activeTab = currentTabs[currentActiveIdx];
+        if (activeTab?.path) {
+          const wasRemoved = isDir
+            ? activeTab.path.startsWith(path + '/') || activeTab.path.startsWith(path + '\\')
+            : activeTab.path === path;
+          if (wasRemoved) {
+            setActiveTabIndex(Math.max(0, currentActiveIdx > 0 ? currentActiveIdx - 1 : 0));
+          }
+        }
+        // Adjust index if it exceeds the remaining tabs
+        if (currentActiveIdx >= remaining.length) {
+          setActiveTabIndex(Math.max(0, remaining.length - 1));
+        }
+      }
+
+      await handleRefreshWorkspace();
+      setMessage(`删除成功: ${name}`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`删除失败: ${error}`);
+    }
+  }, [handleRefreshWorkspace]);
+
+  const handleRenameWorkspaceItem = useCallback(async (oldPath: string, newName: string) => {
+    try {
+      const result = await RenameWorkspaceItem(oldPath, newName);
+
+      // Unwatch old path, watch new path for any affected tabs
+      setTabs(prev => prev.map(t => {
+        if (t.path === oldPath) {
+          void UnwatchFile(oldPath);
+          void WatchFile(result.path, result.modifiedAt || '');
+          return { ...t, path: result.path, name: result.name };
+        }
+        if (t.path && (t.path.startsWith(oldPath + '/') || t.path.startsWith(oldPath + '\\'))) {
+          const relPath = t.path.substring(oldPath.length + 1);
+          const newTabPath = result.path + '/' + relPath;
+          void UnwatchFile(t.path);
+          void WatchFile(newTabPath, t.lastSavedAt || '');
+          return { ...t, path: newTabPath };
+        }
+        return t;
+      }));
+
+      await handleRefreshWorkspace();
+      setMessage(`重命名成功: ${newName}`);
+    } catch (error) {
+      console.error(error);
+      setMessage(`重命名失败: ${error}`);
+    }
+  }, [handleRefreshWorkspace]);
+
+  const handleFileDeleted = useCallback((rawPath: string) => {
+    const isDir = rawPath.endsWith('|dir|');
+    const path = isDir ? rawPath.slice(0, -5) : rawPath;
+
+    setTabs(prev => {
+      const remaining = prev.filter(t => {
+        if (!t.path) return true;
+        if (isDir) return !t.path.startsWith(path + '/') && !t.path.startsWith(path + '\\');
+        return t.path !== path;
+      });
+      if (remaining.length === 0) return [createEmptyDocument()];
+      return remaining;
+    });
+  }, []);
+
+  const handleFileRenamed = useCallback((oldPath: string, newPath: string) => {
+    setTabs(prev => prev.map(t => {
+      if (t.path === oldPath) {
+        return { ...t, path: newPath };
+      }
+      if (t.path && (t.path.startsWith(oldPath + '/') || t.path.startsWith(oldPath + '\\'))) {
+        const relPath = t.path.substring(oldPath.length + 1);
+        return { ...t, path: newPath + '/' + relPath };
+      }
+      return t;
+    }));
+  }, []);
+
   const handleToggleHotkeySettings = useCallback(() => {
     setHotkeySettingsOpen((open) => !open);
   }, []);
@@ -830,6 +978,11 @@ function App() {
             openPaths={tabs.map(t => t.path).filter(Boolean)}
             workspace={workspace}
             onOpenWorkspaceFile={handleOpenWorkspaceFile}
+            onRefreshWorkspace={handleRefreshWorkspace}
+            onFileDeleted={handleDeleteWorkspaceItem}
+            onFileRenamed={handleRenameWorkspaceItem}
+            onCreateFile={handleCreateWorkspaceFile}
+            onCreateFolder={handleCreateWorkspaceFolder}
           />
         )}
         <section className="document-area">
