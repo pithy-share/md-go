@@ -3,9 +3,9 @@ import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import { mergeAttributes } from '@tiptap/core';
 import type { Mark, MarkType, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorState } from '@tiptap/pm/state';
-import { TextSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { ClipboardPaste, Copy } from 'lucide-react';
+import { ClipboardPaste, Copy, Trash2 } from 'lucide-react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Image from '@tiptap/extension-image';
@@ -66,8 +66,36 @@ async function handleImageInsert(
   }
 
   const { state, dispatch } = view;
-  const node = state.schema.nodes.image.create({ src: relativePath });
+  const node = state.schema.nodes.image.create(createEditorImageAttributes(relativePath, documentPath));
   dispatch(state.tr.replaceSelectionWith(node));
+}
+
+function createEditorImageAttributes(source: string, documentPath: string): { src: string; dataMarkdownSrc?: string } {
+  if (!shouldProxyEditorImage(source, documentPath)) {
+    return { src: source };
+  }
+
+  return {
+    src: createLocalImageUrl(source, documentPath),
+    dataMarkdownSrc: source,
+  };
+}
+
+function shouldProxyEditorImage(source: string, documentPath: string): boolean {
+  if (!source || !documentPath) return false;
+  const lowerSource = source.toLowerCase();
+  return !(
+    lowerSource.startsWith('http://') ||
+    lowerSource.startsWith('https://') ||
+    lowerSource.startsWith('data:') ||
+    lowerSource.startsWith('blob:') ||
+    lowerSource.startsWith(`${LOCAL_IMAGE_ENDPOINT}?`)
+  );
+}
+
+function createLocalImageUrl(source: string, documentPath: string): string {
+  const params = new URLSearchParams({ src: source, document: documentPath });
+  return `${LOCAL_IMAGE_ENDPOINT}?${params.toString()}`;
 }
 
 interface MarkdownEditorProps {
@@ -108,7 +136,10 @@ type EditorContextMenuState = {
   x: number;
   y: number;
   canCopy: boolean;
+  imagePos?: number;
 } | null;
+
+const LOCAL_IMAGE_ENDPOINT = '/local-image';
 
 const lowlight = createLowlight(common);
 
@@ -203,6 +234,7 @@ const MarkdownImage = Image.extend({
       const wrapper = document.createElement('div');
       wrapper.className = 'image-resize-wrapper';
       wrapper.contentEditable = 'false';
+      (wrapper as unknown as Record<string, unknown>).__getPos = getPos;
 
       const img = document.createElement('img');
       img.src = node.attrs.src;
@@ -482,7 +514,16 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
           setInlineEdit(null);
           setTableMenu(null);
 
-          if (view.state.selection.empty) {
+          const target = event.target instanceof Element ? event.target : null;
+          const imageWrapper = target?.closest('.image-resize-wrapper') as HTMLElement | null;
+          const getImagePos = imageWrapper
+            ? (imageWrapper as unknown as Record<string, unknown>).__getPos as (() => number) | undefined
+            : undefined;
+          const imagePos = typeof getImagePos === 'function' ? getImagePos() : undefined;
+
+          if (typeof imagePos === 'number') {
+            view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, imagePos)));
+          } else if (view.state.selection.empty) {
             const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
             if (pos) {
               view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos.pos)));
@@ -494,6 +535,7 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
             x: event.clientX,
             y: event.clientY,
             canCopy: !view.state.selection.empty,
+            imagePos,
           });
           return true;
         },
@@ -607,6 +649,18 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
       console.error('Failed to paste clipboard text:', error);
     }
   }, [closeEditorContextMenu, editor]);
+
+  const deleteImageFromContextMenu = useCallback(() => {
+    if (!editor || typeof editorContextMenu?.imagePos !== 'number') return;
+
+    const pos = editorContextMenu.imagePos;
+    const node = editor.state.doc.nodeAt(pos);
+    closeEditorContextMenu();
+
+    if (!node || node.type.name !== 'image') return;
+    editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize).scrollIntoView());
+    editor.view.focus();
+  }, [closeEditorContextMenu, editor, editorContextMenu]);
 
   useEffect(() => {
     if (!editorContextMenu) return;
@@ -894,6 +948,15 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
             <ClipboardPaste size={14} />
             粘贴
           </button>
+          {typeof editorContextMenu.imagePos === 'number' && (
+            <button
+              className="editor-context-menu-item danger"
+              onClick={deleteImageFromContextMenu}
+            >
+              <Trash2 size={14} />
+              删除图片
+            </button>
+          )}
         </div>
       )}
       {inlineEdit?.type === 'code-language' && (
