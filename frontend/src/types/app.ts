@@ -44,6 +44,15 @@ export interface Workspace {
   files: WorkspaceFile[];
 }
 
+export interface WorkspaceSearchResult {
+  path: string;
+  name: string;
+  relativePath: string;
+  line: number;
+  column: number;
+  snippet: string;
+}
+
 export interface WorkspaceSessionState {
   openTabPaths: string[];
   activeTabPath: string;
@@ -68,11 +77,13 @@ export interface AppConfig {
 export interface ExportPayload {
   title: string;
   html: string;
+  sourcePath: string;
 }
 
 export interface ExportPdfPayload {
   title: string;
-  pdf: string;
+  html: string;
+  sourcePath: string;
 }
 
 export interface DocumentState {

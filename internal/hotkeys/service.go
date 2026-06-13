@@ -21,7 +21,7 @@ type Service struct {
 // NewService creates a HotkeyService that persists hotkeys to a JSON file.
 func NewService(configDir string) *Service {
 	return &Service{
-		filePath: filepath.Join(configDir, "md-go", "hotkeys.json"),
+		filePath: filepath.Join(configDir, "hotkeys.json"),
 	}
 }
 

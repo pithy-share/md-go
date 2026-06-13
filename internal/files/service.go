@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,6 +43,9 @@ var skippedWorkspaceDirs = map[string]struct{}{
 type Service struct {
 	ctx    context.Context
 	config *config.Service
+
+	workspaceMu   sync.RWMutex
+	workspaceRoot string
 
 	watcherMu    sync.Mutex
 	watchedFiles map[string]time.Time // path -> last known ModTime
@@ -173,8 +177,90 @@ func (s *Service) ScanFolder(path string) (models.Workspace, error) {
 	if s.config != nil {
 		_ = s.config.TouchRecentFolder(root)
 	}
+	s.setWorkspaceRoot(root)
 
 	return workspace, nil
+}
+
+func (s *Service) SearchWorkspace(query string) ([]models.WorkspaceSearchResult, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []models.WorkspaceSearchResult{}, nil
+	}
+
+	root, err := s.currentWorkspaceRoot()
+	if err != nil {
+		return []models.WorkspaceSearchResult{}, err
+	}
+
+	lowerQuery := strings.ToLower(query)
+	results := []models.WorkspaceSearchResult{}
+	const maxResults = 500
+
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			if path == root {
+				return nil
+			}
+			if shouldSkipWorkspaceDir(entry.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !isWorkspaceMarkdownFile(path) {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		relativePath, err := filepath.Rel(root, path)
+		if err != nil {
+			relativePath = filepath.Base(path)
+		}
+		relativePath = filepath.ToSlash(relativePath)
+
+		lines := strings.Split(string(content), "\n")
+		for lineIndex, line := range lines {
+			cleanLine := strings.TrimSuffix(line, "\r")
+			column := strings.Index(strings.ToLower(cleanLine), lowerQuery)
+			if column < 0 {
+				continue
+			}
+
+			results = append(results, models.WorkspaceSearchResult{
+				Path:         filepath.Clean(path),
+				Name:         filepath.Base(path),
+				RelativePath: relativePath,
+				Line:         lineIndex + 1,
+				Column:       column + 1,
+				Snippet:      searchSnippet(cleanLine, column, len(query)),
+			})
+			if len(results) >= maxResults {
+				return errSearchLimitReached
+			}
+		}
+		return nil
+	})
+	if errors.Is(err, errSearchLimitReached) {
+		err = nil
+	}
+	if err != nil {
+		return []models.WorkspaceSearchResult{}, err
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		if strings.EqualFold(results[i].RelativePath, results[j].RelativePath) {
+			return results[i].Line < results[j].Line
+		}
+		return strings.ToLower(results[i].RelativePath) < strings.ToLower(results[j].RelativePath)
+	})
+
+	return results, nil
 }
 
 func (s *Service) ReadDocument(path string) (models.DocumentPayload, error) {
@@ -443,6 +529,125 @@ func ensureMarkdownExtension(path string) string {
 	}
 }
 
+var errSearchLimitReached = errors.New("search result limit reached")
+
+func searchSnippet(line string, column int, queryLength int) string {
+	const contextChars = 80
+	if column < 0 {
+		column = 0
+	}
+	start := column - contextChars
+	if start < 0 {
+		start = 0
+	}
+	end := column + queryLength + contextChars
+	if end > len(line) {
+		end = len(line)
+	}
+
+	snippet := strings.TrimSpace(line[start:end])
+	if start > 0 {
+		snippet = "..." + snippet
+	}
+	if end < len(line) {
+		snippet += "..."
+	}
+	return snippet
+}
+
+func (s *Service) setWorkspaceRoot(root string) {
+	s.workspaceMu.Lock()
+	defer s.workspaceMu.Unlock()
+	s.workspaceRoot = filepath.Clean(root)
+}
+
+func (s *Service) currentWorkspaceRoot() (string, error) {
+	s.workspaceMu.RLock()
+	root := s.workspaceRoot
+	s.workspaceMu.RUnlock()
+
+	if strings.TrimSpace(root) == "" {
+		return "", errors.New("no workspace is open")
+	}
+	root = filepath.Clean(root)
+	info, err := os.Stat(root)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", errors.New("workspace root is not a folder")
+	}
+	return root, nil
+}
+
+func (s *Service) requireWorkspacePath(path string) (string, string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", "", errors.New("path is required")
+	}
+
+	root, err := s.currentWorkspaceRoot()
+	if err != nil {
+		return "", "", err
+	}
+
+	target := filepath.Clean(path)
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(root, target)
+	}
+	target, err = filepath.Abs(target)
+	if err != nil {
+		return "", "", err
+	}
+	root, err = filepath.Abs(root)
+	if err != nil {
+		return "", "", err
+	}
+	root = filepath.Clean(root)
+	target = filepath.Clean(target)
+
+	relative, err := filepath.Rel(root, target)
+	if err != nil {
+		return "", "", err
+	}
+	if relative == "." {
+		return target, root, nil
+	}
+	if strings.HasPrefix(relative, ".."+string(filepath.Separator)) || relative == ".." || filepath.IsAbs(relative) {
+		return "", "", errors.New("path is outside the current workspace")
+	}
+	return target, root, nil
+}
+
+func (s *Service) requireWorkspaceChildPath(path string) (string, string, error) {
+	target, root, err := s.requireWorkspacePath(path)
+	if err != nil {
+		return "", "", err
+	}
+	if samePath(target, root) {
+		return "", "", errors.New("operation cannot target the workspace root")
+	}
+	return target, root, nil
+}
+
+func samePath(left string, right string) bool {
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	if goruntime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
+}
+
+func pathHasPrefix(path string, prefix string) bool {
+	path = filepath.Clean(path)
+	prefix = filepath.Clean(prefix)
+	if goruntime.GOOS == "windows" {
+		path = strings.ToLower(path)
+		prefix = strings.ToLower(prefix)
+	}
+	return strings.HasPrefix(path, prefix)
+}
+
 // CreateWorkspaceFile creates a new empty Markdown file under parentDir.
 func (s *Service) CreateWorkspaceFile(parentDir, name string) (models.WorkspaceFile, error) {
 	if strings.TrimSpace(parentDir) == "" {
@@ -455,11 +660,25 @@ func (s *Service) CreateWorkspaceFile(parentDir, name string) (models.WorkspaceF
 		return models.WorkspaceFile{}, errors.New("file name contains invalid characters")
 	}
 
-	parentDir = filepath.Clean(parentDir)
+	parentDir, _, err := s.requireWorkspacePath(parentDir)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
+	parentInfo, err := os.Stat(parentDir)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
+	if !parentInfo.IsDir() {
+		return models.WorkspaceFile{}, errors.New("parent path is not a folder")
+	}
+
 	name = ensureMarkdownExtension(name)
 
 	targetPath := filepath.Join(parentDir, name)
 	targetPath = filepath.Clean(targetPath)
+	if _, _, err := s.requireWorkspacePath(targetPath); err != nil {
+		return models.WorkspaceFile{}, err
+	}
 
 	// Check for name conflict
 	if _, err := os.Stat(targetPath); err == nil {
@@ -506,9 +725,23 @@ func (s *Service) CreateWorkspaceFolder(parentDir, name string) (models.Workspac
 		return models.WorkspaceFile{}, errors.New("folder name contains invalid characters")
 	}
 
-	parentDir = filepath.Clean(parentDir)
+	parentDir, _, err := s.requireWorkspacePath(parentDir)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
+	parentInfo, err := os.Stat(parentDir)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
+	if !parentInfo.IsDir() {
+		return models.WorkspaceFile{}, errors.New("parent path is not a folder")
+	}
+
 	targetPath := filepath.Join(parentDir, name)
 	targetPath = filepath.Clean(targetPath)
+	if _, _, err := s.requireWorkspacePath(targetPath); err != nil {
+		return models.WorkspaceFile{}, err
+	}
 
 	// Check for name conflict
 	if _, err := os.Stat(targetPath); err == nil {
@@ -531,16 +764,23 @@ func (s *Service) DeleteWorkspaceItem(path string, isDir bool) error {
 		return errors.New("path is required")
 	}
 
-	path = filepath.Clean(path)
+	path, _, err := s.requireWorkspaceChildPath(path)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() != isDir {
+		if isDir {
+			return errors.New("path is not a folder")
+		}
+		return errors.New("path is not a file")
+	}
 
-	if isDir {
-		if err := os.RemoveAll(path); err != nil {
-			return err
-		}
-	} else {
-		if err := os.Remove(path); err != nil {
-			return err
-		}
+	if err := moveToRecycleBin(path); err != nil {
+		return err
 	}
 
 	return nil
@@ -558,10 +798,16 @@ func (s *Service) RenameWorkspaceItem(oldPath, newName string) (models.Workspace
 		return models.WorkspaceFile{}, errors.New("new name contains invalid characters")
 	}
 
-	oldPath = filepath.Clean(oldPath)
+	oldPath, _, err := s.requireWorkspaceChildPath(oldPath)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
 	parentDir := filepath.Dir(oldPath)
 	newPath := filepath.Join(parentDir, newName)
 	newPath = filepath.Clean(newPath)
+	if _, _, err := s.requireWorkspacePath(newPath); err != nil {
+		return models.WorkspaceFile{}, err
+	}
 
 	// Check for name conflict when target differs from source
 	if oldPath != newPath {
@@ -596,8 +842,14 @@ func (s *Service) MoveWorkspaceItem(oldPath string, newParentDir string) (models
 		return models.WorkspaceFile{}, errors.New("target directory is required")
 	}
 
-	oldPath = filepath.Clean(oldPath)
-	newParentDir = filepath.Clean(newParentDir)
+	oldPath, _, err := s.requireWorkspaceChildPath(oldPath)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
+	newParentDir, _, err = s.requireWorkspacePath(newParentDir)
+	if err != nil {
+		return models.WorkspaceFile{}, err
+	}
 
 	// Verify source exists
 	srcInfo, err := os.Stat(oldPath)
@@ -627,7 +879,7 @@ func (s *Service) MoveWorkspaceItem(oldPath string, newParentDir string) (models
 	if srcInfo.IsDir() {
 		oldWithSep := oldPath + string(filepath.Separator)
 		newWithSep := newPath + string(filepath.Separator)
-		if strings.HasPrefix(newWithSep, oldWithSep) {
+		if pathHasPrefix(newWithSep, oldWithSep) {
 			return models.WorkspaceFile{}, errors.New("cannot move a folder into itself")
 		}
 	}

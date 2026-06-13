@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 
@@ -158,18 +159,26 @@ function prepareEditorHtml(html: string, documentPath: string): string {
   const parsed = parseHtml(html);
   prepareEditorImages(parsed, documentPath);
   prepareEditorTaskLists(parsed);
-  return parsed.body.innerHTML;
+  return sanitizeMarkdownHtml(parsed.body.innerHTML);
 }
 
 function prepareMarkdownHtml(html: string): string {
   const parsed = parseHtml(html);
   restoreMarkdownImageSources(parsed);
   prepareMarkdownTaskLists(parsed);
-  return parsed.body.innerHTML;
+  return sanitizeMarkdownHtml(parsed.body.innerHTML);
 }
 
 function parseHtml(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
+}
+
+function sanitizeMarkdownHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ADD_ATTR: ['data-markdown-src', 'data-type', 'data-checked', 'target'],
+    ALLOW_DATA_ATTR: true,
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|file):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  });
 }
 
 function prepareEditorImages(document: Document, documentPath: string): void {

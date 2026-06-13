@@ -368,7 +368,7 @@ function WorkspaceTree({
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, item: WorkspaceTreeItem) => {
-    const path = item.type === 'file' ? item.file.path : (item as WorkspaceFolderNode).id;
+    const path = item.type === 'file' ? item.file.path : `${workspaceRoot}/${item.id}`;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', path);
     e.dataTransfer.setData('application/x-workspace-item', JSON.stringify({

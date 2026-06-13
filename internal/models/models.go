@@ -33,6 +33,16 @@ type Workspace struct {
 	Files    []WorkspaceFile `json:"files"`
 }
 
+// WorkspaceSearchResult describes one text match inside a workspace document.
+type WorkspaceSearchResult struct {
+	Path         string `json:"path"`
+	Name         string `json:"name"`
+	RelativePath string `json:"relativePath"`
+	Line         int    `json:"line"`
+	Column       int    `json:"column"`
+	Snippet      string `json:"snippet"`
+}
+
 // WorkspaceSessionState stores UI session state per workspace.
 type WorkspaceSessionState struct {
 	OpenTabPaths         []string `json:"openTabPaths"`
@@ -155,5 +165,6 @@ func DefaultHotkeys() []HotkeyBinding {
 		{ID: "toggle-outline", Action: "toggle-outline", Label: "Toggle Outline", Key: "o", Ctrl: true, Shift: true, Enabled: true, Category: "view"},
 		{ID: "toggle-editor-mode", Action: "toggle-editor-mode", Label: "Toggle Editor Mode", Key: "m", Ctrl: true, Shift: true, Enabled: true, Category: "view"},
 		{ID: "find", Action: "find", Label: "Search", Key: "f", Ctrl: true, Enabled: true, Category: "edit"},
+		{ID: "workspace-search", Action: "workspace-search", Label: "Search Workspace", Key: "f", Ctrl: true, Shift: true, Enabled: true, Category: "edit"},
 	}
 }

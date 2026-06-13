@@ -275,6 +275,28 @@ export namespace models {
 		}
 	}
 	
+	export class WorkspaceSearchResult {
+	    path: string;
+	    name: string;
+	    relativePath: string;
+	    line: number;
+	    column: number;
+	    snippet: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkspaceSearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.name = source["name"];
+	        this.relativePath = source["relativePath"];
+	        this.line = source["line"];
+	        this.column = source["column"];
+	        this.snippet = source["snippet"];
+	    }
+	}
 
 }
 

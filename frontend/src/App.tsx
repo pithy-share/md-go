@@ -4,6 +4,8 @@ import './App.css';
 import { Toolbar } from './components/Toolbar';
 import { Sidebar, OutlinePanel } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
+import { StartPage } from './components/StartPage';
+import { WorkspaceSearch } from './components/WorkspaceSearch';
 import { MarkdownEditor, SourceMarkdownEditor } from './editor/MarkdownEditor';
 import { markdownToExportHtml } from './editor/markdown';
 import {
@@ -17,7 +19,7 @@ import {
   normalizeConfig,
   resolveTheme,
 } from './state/documentStore';
-import type { AppConfig, DocumentPayload, DocumentState, EditorMode, HotkeyBinding, OutlineItem, RecentDocument, SaveResult, Workspace, WorkspaceSessionState } from './types/app';
+import type { AppConfig, DocumentPayload, DocumentState, EditorMode, HotkeyBinding, OutlineItem, RecentDocument, SaveResult, Workspace, WorkspaceSearchResult, WorkspaceSessionState } from './types/app';
 import {
   CreateWorkspaceFile,
   CreateWorkspaceFolder,
@@ -35,6 +37,7 @@ import {
   SaveDocument,
   SaveDocumentAs,
   ScanFolder,
+  SearchWorkspace,
   WatchFile,
   UnwatchFile,
 } from '../wailsjs/go/main/App';
@@ -52,12 +55,17 @@ function App() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [showStartPage, setShowStartPage] = useState(true);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const restoredRecentRef = useRef(false);
   const sessionPersistenceReadyRef = useRef(false);
   const lastPersistedSessionRef = useRef('');
   const [message, setMessage] = useState('Ready');
+  const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
+  const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState('');
+  const [workspaceSearchResults, setWorkspaceSearchResults] = useState<WorkspaceSearchResult[]>([]);
+  const [workspaceSearchLoading, setWorkspaceSearchLoading] = useState(false);
 
   const activeTab = tabs[activeTabIndex];
   const currentWorkspacePath = workspace?.rootPath ?? '';
@@ -137,11 +145,15 @@ function App() {
       setTabs([createEmptyDocument()]);
       setActiveTabIndex(0);
       setOutline([]);
+      setShowStartPage(true);
       setMessage(`Closed missing file ${tab.name}`);
       return;
     }
 
-    setTabs(remaining);
+    setTabs((prev) => {
+      const next = prev.filter((item) => item.path !== path);
+      return next.length > 0 ? next : [createEmptyDocument()];
+    });
     const currentActiveIdx = activeTabIndexRef.current;
     if (currentActiveIdx > tabIndex) {
       setActiveTabIndex(currentActiveIdx - 1);
@@ -175,6 +187,7 @@ function App() {
             return;
           } catch (error) {
             console.error(error);
+            if (!active) return;
             const nextConfig = pruneMissingWorkspaceReference(startupConfig, startupWorkspacePath);
             startupConfig = nextConfig;
             setConfig(nextConfig);
@@ -194,6 +207,7 @@ function App() {
             })
             .catch((error) => {
               console.error(error);
+              if (!active) return;
               const nextConfig = pruneMissingWorkspaceReference(startupConfig, latestRecent.path);
               setConfig(nextConfig);
               void persistConfigWith(() => nextConfig);
@@ -207,6 +221,7 @@ function App() {
           const restoredTab = documentFromPayload(payload);
           setTabs([restoredTab]);
           setActiveTabIndex(0);
+          setShowStartPage(false);
           if (payload.lastModified) {
             void WatchFile(payload.path, payload.lastModified);
           }
@@ -305,6 +320,7 @@ function App() {
     restoredRecentRef.current = true;
     setTabs(restoredTabs);
     setActiveTabIndex(normalizedActiveIndex);
+    setShowStartPage(false);
     for (const payload of restoredPayloads) {
       if (payload.lastModified) {
         void WatchFile(payload.path, payload.lastModified);
@@ -364,6 +380,7 @@ function App() {
     setTabs(prev => [...prev, newTab]);
     setActiveTabIndex(tabs.length);
     setOutline([]);
+    setShowStartPage(false);
     setMessage('New document');
   }, [tabs.length]);
 
@@ -381,6 +398,7 @@ function App() {
       setTabs(prev => [...prev, newTab]);
       setActiveTabIndex(tabs.length);
       setOutline([]);
+      setShowStartPage(false);
       pushFileNav(payload.path);
       if (payload.lastModified) {
         void WatchFile(payload.path, payload.lastModified);
@@ -414,6 +432,7 @@ function App() {
       setTabs([createEmptyDocument()]);
       setActiveTabIndex(0);
       setOutline([]);
+      setShowStartPage(true);
       return;
     }
 
@@ -451,6 +470,7 @@ function App() {
     });
     setActiveTabIndex(newActiveIndex);
     setOutline([]);
+    setShowStartPage(lockedTabs.length === 0);
   }, [tabs, activeTabIndex]);
 
   const handleCloseRight = useCallback((index: number) => {
@@ -517,6 +537,7 @@ function App() {
       try {
         const payload = await ReadDocument(path);
         updateActiveTab(() => documentFromPayload(payload));
+        setShowStartPage(false);
         if (!skipHistory) pushFileNav(path);
         if (payload.lastModified) {
           void WatchFile(path, payload.lastModified);
@@ -533,6 +554,7 @@ function App() {
       const newTab = documentFromPayload(payload);
       setTabs(prev => [...prev, newTab]);
       setActiveTabIndex(tabs.length);
+      setShowStartPage(false);
       if (!skipHistory) pushFileNav(path);
       if (payload.lastModified) {
         void WatchFile(path, payload.lastModified);
@@ -556,6 +578,7 @@ function App() {
       try {
         const payload = await ReadDocument(path);
         updateActiveTab(() => documentFromPayload(payload));
+        setShowStartPage(false);
         pushFileNav(path);
         if (payload.lastModified) {
           void WatchFile(path, payload.lastModified);
@@ -572,6 +595,7 @@ function App() {
       const newTab = documentFromPayload(payload);
       setTabs(prev => [...prev, newTab]);
       setActiveTabIndex(tabs.length);
+      setShowStartPage(false);
       pushFileNav(path);
       if (payload.lastModified) {
         void WatchFile(path, payload.lastModified);
@@ -779,6 +803,7 @@ function App() {
         setTabs([createEmptyDocument()]);
         setActiveTabIndex(0);
         setOutline([]);
+        setShowStartPage(true);
       } else {
         setTabs(remaining);
         // Check if active tab was removed
@@ -799,7 +824,7 @@ function App() {
       }
 
       await handleRefreshWorkspace();
-      setMessage(`删除成功: ${name}`);
+      setMessage(`已移到回收站: ${name}`);
     } catch (error) {
       console.error(error);
       setMessage(`删除失败: ${error}`);
@@ -835,34 +860,6 @@ function App() {
     }
   }, [handleRefreshWorkspace]);
 
-  const handleFileDeleted = useCallback((rawPath: string) => {
-    const isDir = rawPath.endsWith('|dir|');
-    const path = isDir ? rawPath.slice(0, -5) : rawPath;
-
-    setTabs(prev => {
-      const remaining = prev.filter(t => {
-        if (!t.path) return true;
-        if (isDir) return !t.path.startsWith(path + '/') && !t.path.startsWith(path + '\\');
-        return t.path !== path;
-      });
-      if (remaining.length === 0) return [createEmptyDocument()];
-      return remaining;
-    });
-  }, []);
-
-  const handleFileRenamed = useCallback((oldPath: string, newPath: string) => {
-    setTabs(prev => prev.map(t => {
-      if (t.path === oldPath) {
-        return { ...t, path: newPath };
-      }
-      if (t.path && (t.path.startsWith(oldPath + '/') || t.path.startsWith(oldPath + '\\'))) {
-        const relPath = t.path.substring(oldPath.length + 1);
-        return { ...t, path: newPath + '/' + relPath };
-      }
-      return t;
-    }));
-  }, []);
-
   const handleMoveWorkspaceItem = useCallback(async (oldPath: string, newParentDir: string) => {
     try {
       const result = await MoveWorkspaceItem(oldPath, newParentDir);
@@ -890,6 +887,53 @@ function App() {
       setMessage(`移动失败: ${error}`);
     }
   }, [handleRefreshWorkspace]);
+
+  const handleOpenRecent = useCallback(async (item: RecentDocument) => {
+    try {
+      if (item.type === 'folder') {
+        const ws = await ScanFolder(item.path);
+        await handleWorkspaceLoaded(ws);
+        return;
+      }
+
+      await handleOpenLocalFile(item.path);
+      setShowStartPage(false);
+    } catch (error) {
+      console.error(error);
+      const nextConfig = item.type === 'folder'
+        ? pruneMissingWorkspaceReference(config, item.path)
+        : removeRecentDocument(config, item.path, item.type);
+      setConfig(nextConfig);
+      void persistConfigWith(() => nextConfig);
+      setMessage('Recent item is unavailable');
+    }
+  }, [config, handleOpenLocalFile, handleWorkspaceLoaded, persistConfigWith]);
+
+  const handleRestoreSession = useCallback(async () => {
+    const restoredCurrent = currentWorkspacePath
+      ? await restoreSessionTabs(config, currentWorkspacePath)
+      : false;
+    const restoredGlobal = restoredCurrent ? true : await restoreSessionTabs(config, '');
+    if (!restoredGlobal) {
+      setMessage('No saved session to restore');
+    }
+  }, [config, currentWorkspacePath]);
+
+  const handleOpenWorkspaceSearch = useCallback(() => {
+    if (!workspace?.rootPath) {
+      setMessage('Open a folder before searching');
+      return;
+    }
+    setWorkspaceSearchOpen(true);
+  }, [workspace?.rootPath]);
+
+  const handleOpenSearchResult = useCallback((result: WorkspaceSearchResult) => {
+    setWorkspaceSearchOpen(false);
+    setWorkspaceSearchQuery('');
+    void handleOpenWorkspaceFile(result.path).then(() => {
+      setMessage(`Opened ${result.name} at line ${result.line}`);
+    });
+  }, [handleOpenWorkspaceFile]);
 
   const handleToggleHotkeySettings = useCallback(() => {
     setHotkeySettingsOpen((open) => !open);
@@ -936,6 +980,41 @@ function App() {
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    if (!workspaceSearchOpen) return;
+
+    const query = workspaceSearchQuery.trim();
+    if (!query) {
+      setWorkspaceSearchResults([]);
+      setWorkspaceSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setWorkspaceSearchLoading(true);
+    const timeout = window.setTimeout(() => {
+      SearchWorkspace(query)
+        .then((results) => {
+          if (cancelled) return;
+          setWorkspaceSearchResults(results ?? []);
+        })
+        .catch((error) => {
+          if (cancelled) return;
+          console.error(error);
+          setWorkspaceSearchResults([]);
+          setMessage('Workspace search failed');
+        })
+        .finally(() => {
+          if (!cancelled) setWorkspaceSearchLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [workspaceSearchOpen, workspaceSearchQuery]);
+
   // ── Drag & drop: open .md files dropped onto the window ──
   const handleOpenLocalFileRef = useRef(handleOpenLocalFile);
   handleOpenLocalFileRef.current = handleOpenLocalFile;
@@ -981,6 +1060,7 @@ function App() {
     { id: 'export-pdf', label: 'Export PDF', description: 'Export document as PDF', category: 'file', action: handleExportPdf, hotkeyLabel: 'Ctrl+Shift+P' },
     // Edit
     { id: 'find', label: 'Find', description: 'Search in document', category: 'edit', action: handleFindAction, hotkeyLabel: 'Ctrl+F' },
+    { id: 'workspace-search', label: 'Search Workspace', description: 'Search all Markdown files in the current folder', category: 'edit', action: handleOpenWorkspaceSearch, hotkeyLabel: 'Ctrl+Shift+F' },
     // Format
     { id: 'bold', label: 'Bold', description: 'Toggle bold text', category: 'format', action: () => editor?.chain().focus().toggleBold().run(), hotkeyLabel: 'Ctrl+B' },
     { id: 'italic', label: 'Italic', description: 'Toggle italic text', category: 'format', action: () => editor?.chain().focus().toggleItalic().run(), hotkeyLabel: 'Ctrl+I' },
@@ -1004,7 +1084,7 @@ function App() {
     { id: 'close-tab', label: 'Close Tab', description: 'Close the current tab', category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
     { id: 'next-tab', label: 'Next Tab', description: 'Switch to next tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
     { id: 'prev-tab', label: 'Previous Tab', description: 'Switch to previous tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length), hotkeyLabel: 'Ctrl+Shift+Tab' },
-  ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length]);
+  ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, handleOpenWorkspaceSearch, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length]);
 
   // ── Keep action dispatcher ref in sync ──
   useEffect(() => {
@@ -1033,6 +1113,7 @@ function App() {
       'inline-code': () => editorRef.current?.chain().focus().toggleCode().run(),
       link: () => handleLinkAction(),
       find: () => handleFindAction(),
+      'workspace-search': handleOpenWorkspaceSearch,
     };
   });
 
@@ -1236,7 +1317,19 @@ function App() {
           />
         )}
         <section className="document-area">
-          {config.editorMode === 'source' ? (
+          {showStartPage ? (
+            <StartPage
+              recentDocuments={config.recentDocuments}
+              workspaceName={workspace?.name || ''}
+              canRestoreSession={currentWorkspaceSession.openTabPaths.length > 0 || config.openTabPaths.length > 0}
+              onNew={handleNew}
+              onOpenFile={handleOpen}
+              onOpenFolder={handleOpenFolder}
+              onRestoreSession={handleRestoreSession}
+              onOpenRecent={handleOpenRecent}
+              onSearchWorkspace={handleOpenWorkspaceSearch}
+            />
+          ) : config.editorMode === 'source' ? (
             <SourceMarkdownEditor
               key={`source-${activeTab.id}`}
               markdown={activeTab.markdown}
@@ -1266,6 +1359,16 @@ function App() {
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         commands={commands}
+      />
+      <WorkspaceSearch
+        open={workspaceSearchOpen}
+        query={workspaceSearchQuery}
+        results={workspaceSearchResults}
+        loading={workspaceSearchLoading}
+        workspaceName={workspace?.name || ''}
+        onQueryChange={setWorkspaceSearchQuery}
+        onClose={() => setWorkspaceSearchOpen(false)}
+        onOpenResult={handleOpenSearchResult}
       />
       <div className="toast" role="status" aria-live="polite">{message}</div>
     </div>

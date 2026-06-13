@@ -94,6 +94,10 @@ export function ScanFolder(arg1) {
   return window['go']['main']['App']['ScanFolder'](arg1);
 }
 
+export function SearchWorkspace(arg1) {
+  return window['go']['main']['App']['SearchWorkspace'](arg1);
+}
+
 export function UnwatchFile(arg1) {
   return window['go']['main']['App']['UnwatchFile'](arg1);
 }

@@ -48,6 +48,8 @@ export function SaveImageFile(arg1:string,arg2:Array<number>,arg3:string):Promis
 
 export function ScanFolder(arg1:string):Promise<models.Workspace>;
 
+export function SearchWorkspace(arg1:string):Promise<Array<models.WorkspaceSearchResult>>;
+
 export function UnwatchFile(arg1:string):Promise<void>;
 
 export function UpdateRecentDocument(arg1:string):Promise<void>;

@@ -52,6 +52,10 @@ func (a *App) ScanFolder(path string) (models.Workspace, error) {
 	return a.files.ScanFolder(path)
 }
 
+func (a *App) SearchWorkspace(query string) ([]models.WorkspaceSearchResult, error) {
+	return a.files.SearchWorkspace(query)
+}
+
 func (a *App) ReadDocument(path string) (models.DocumentPayload, error) {
 	return a.files.ReadDocument(path)
 }
