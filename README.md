@@ -62,4 +62,4 @@ md-go/
 
 ## 许可证
 
-本项目当前未声明开源许可证（保留所有权利）。后续版本将补充。
+[MIT License](./LICENSE) © 2026 zhangyong
