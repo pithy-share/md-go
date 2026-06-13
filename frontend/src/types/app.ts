@@ -101,3 +101,12 @@ export interface HotkeyBinding {
   enabled: boolean;
   category: string;
 }
+
+export interface CommandItem {
+  id: string;
+  label: string;
+  description: string;
+  category: 'file' | 'edit' | 'view' | 'tab' | 'format';
+  action: () => void;
+  hotkeyLabel?: string;
+}

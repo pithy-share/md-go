@@ -37,6 +37,8 @@ import { models } from '../wailsjs/go/models';
 import { LogPrint, OnFileDrop, OnFileDropOff, EventsOn, WindowSetBackgroundColour } from '../wailsjs/runtime/runtime';
 import { HotkeySettings } from './components/HotkeySettings';
 import { TabBar } from './components/TabBar';
+import { CommandPalette } from './components/CommandPalette';
+import type { CommandItem } from './types/app';
 
 function App() {
   const [tabs, setTabs] = useState<DocumentState[]>([createEmptyDocument()]);
@@ -67,6 +69,7 @@ function App() {
   // ── Hotkey state ──
   const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>([]);
   const [hotkeySettingsOpen, setHotkeySettingsOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const actionHandlersRef = useRef<Record<string, () => void>>({});
 
   // ── File navigation history ──
@@ -627,6 +630,43 @@ function App() {
     window.dispatchEvent(new CustomEvent('md-go:open-search'));
   }, []);
 
+  // ── Command palette ──
+  const commands: CommandItem[] = useMemo(() => [
+    // File
+    { id: 'new', label: 'New Document', description: 'Create a new document', category: 'file', action: handleNew, hotkeyLabel: 'Ctrl+N' },
+    { id: 'open', label: 'Open File', description: 'Open a Markdown file', category: 'file', action: handleOpen, hotkeyLabel: 'Ctrl+O' },
+    { id: 'save', label: 'Save', description: 'Save current document', category: 'file', action: handleSave, hotkeyLabel: 'Ctrl+S' },
+    { id: 'save-as', label: 'Save As', description: 'Save as a new file', category: 'file', action: handleSaveAs, hotkeyLabel: 'Ctrl+Shift+S' },
+    { id: 'open-folder', label: 'Open Folder', description: 'Open a workspace folder', category: 'file', action: handleOpenFolder },
+    { id: 'export-html', label: 'Export HTML', description: 'Export document as HTML', category: 'file', action: handleExport, hotkeyLabel: 'Ctrl+Shift+E' },
+    { id: 'export-pdf', label: 'Export PDF', description: 'Export document as PDF', category: 'file', action: handleExportPdf, hotkeyLabel: 'Ctrl+Shift+P' },
+    // Edit
+    { id: 'find', label: 'Find', description: 'Search in document', category: 'edit', action: handleFindAction, hotkeyLabel: 'Ctrl+F' },
+    // Format
+    { id: 'bold', label: 'Bold', description: 'Toggle bold text', category: 'format', action: () => editor?.chain().focus().toggleBold().run(), hotkeyLabel: 'Ctrl+B' },
+    { id: 'italic', label: 'Italic', description: 'Toggle italic text', category: 'format', action: () => editor?.chain().focus().toggleItalic().run(), hotkeyLabel: 'Ctrl+I' },
+    { id: 'heading1', label: 'Heading 1', description: 'Toggle heading level 1', category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(), hotkeyLabel: 'Ctrl+1' },
+    { id: 'heading2', label: 'Heading 2', description: 'Toggle heading level 2', category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), hotkeyLabel: 'Ctrl+2' },
+    { id: 'heading3', label: 'Heading 3', description: 'Toggle heading level 3', category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), hotkeyLabel: 'Ctrl+3' },
+    { id: 'link', label: 'Insert Link', description: 'Insert or edit a link', category: 'format', action: handleLinkAction, hotkeyLabel: 'Ctrl+K' },
+    { id: 'code', label: 'Inline Code', description: 'Toggle inline code', category: 'format', action: () => editor?.chain().focus().toggleCode().run(), hotkeyLabel: 'Ctrl+Shift+`' },
+    { id: 'bullet-list', label: 'Bullet List', description: 'Toggle bullet list', category: 'format', action: () => editor?.chain().focus().toggleBulletList().run() },
+    { id: 'ordered-list', label: 'Ordered List', description: 'Toggle ordered list', category: 'format', action: () => editor?.chain().focus().toggleOrderedList().run() },
+    { id: 'task-list', label: 'Task List', description: 'Toggle task list', category: 'format', action: () => editor?.chain().focus().toggleTaskList().run() },
+    { id: 'blockquote', label: 'Blockquote', description: 'Toggle blockquote', category: 'format', action: () => editor?.chain().focus().toggleBlockquote().run() },
+    { id: 'code-block', label: 'Code Block', description: 'Insert code block', category: 'format', action: () => editor?.chain().focus().setCodeBlock().run() },
+    { id: 'table', label: 'Insert Table', description: 'Insert a 3x3 table', category: 'format', action: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+    // View
+    { id: 'toggle-sidebar', label: 'Toggle Sidebar', description: 'Show or hide the sidebar', category: 'view', action: handleToggleSidebar, hotkeyLabel: 'Ctrl+Shift+B' },
+    { id: 'toggle-outline', label: 'Toggle Outline', description: 'Show or hide the outline', category: 'view', action: handleToggleOutline, hotkeyLabel: 'Ctrl+Shift+O' },
+    { id: 'toggle-editor-mode', label: 'Toggle Editor Mode', description: 'Switch between WYSIWYG and source mode', category: 'view', action: handleToggleEditorMode, hotkeyLabel: 'Ctrl+Shift+M' },
+    { id: 'toggle-theme', label: 'Toggle Theme', description: 'Switch between light and dark theme', category: 'view', action: handleToggleTheme },
+    // Tab
+    { id: 'close-tab', label: 'Close Tab', description: 'Close the current tab', category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
+    { id: 'next-tab', label: 'Next Tab', description: 'Switch to next tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
+    { id: 'prev-tab', label: 'Previous Tab', description: 'Switch to previous tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length), hotkeyLabel: 'Ctrl+Shift+Tab' },
+  ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length]);
+
   // ── Keep action dispatcher ref in sync ──
   useEffect(() => {
     editorRef.current = editor;
@@ -686,6 +726,13 @@ function App() {
         setActiveTabIndex(prev => event.shiftKey
           ? (prev - 1 + tabs.length) % tabs.length
           : (prev + 1) % tabs.length);
+        return;
+      }
+
+      // Ctrl+P → command palette
+      if ((event.ctrlKey || event.metaKey) && event.key === 'p' && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        setCommandPaletteOpen(prev => !prev);
         return;
       }
 
@@ -859,6 +906,11 @@ function App() {
       </main>
       <StatusBar path={activeTab.path} isDirty={activeTab.isDirty} lastSavedAt={activeTab.lastSavedAt} stats={stats} />
       <HotkeySettings isOpen={hotkeySettingsOpen} onClose={handleToggleHotkeySettings} onSaved={handleHotkeysSaved} />
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        commands={commands}
+      />
       <div className="toast" role="status" aria-live="polite">{message}</div>
     </div>
   );
