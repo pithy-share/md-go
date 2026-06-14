@@ -4,6 +4,8 @@
 
 MD Go 是基于 **Wails + React + Go** 构建的桌面 Markdown 编辑器。它使用系统原生 WebView 而非 Electron，体积小、启动快；并以「工作区」为核心组织文档——文件树、多标签页、跨文件全文搜索，像管理代码一样管理你的 Markdown。
 
+![MD Go 界面预览](docs/images/screenshot.png)
+
 ## 核心特性
 
 - **所见即所得 / 源码双模式**：基于 [TipTap](https://tiptap.dev) 的富文本编辑，一键切换源码模式
