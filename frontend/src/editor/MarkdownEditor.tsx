@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
-import { mergeAttributes } from '@tiptap/core';
+import { mergeAttributes, Extension } from '@tiptap/core';
 import type { Mark, MarkType, Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { EditorState } from '@tiptap/pm/state';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
@@ -11,6 +11,7 @@ import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
+import Highlight from '@tiptap/extension-highlight';
 import { Table } from '@tiptap/extension-table';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
@@ -30,6 +31,16 @@ import { SearchBar } from './SearchBar';
 import { createSearchPlugin, findMatches, findMatchesInDoc, searchPluginKey, type SearchResult } from './searchPlugin';
 import type { OutlineItem } from '../types/app';
 import { t } from '../i18n';
+
+// Toggle ==highlight== with Ctrl/Cmd+Shift+H (the Highlight extension ships no default shortcut).
+const highlightShortcut = Extension.create({
+  name: 'highlightShortcut',
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Shift-H': () => this.editor.commands.toggleHighlight(),
+    };
+  },
+});
 
 async function handleImageInsert(
   file: File,
@@ -498,6 +509,8 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
         nested: true,
       }),
       Typography,
+      Highlight.configure({ multicolor: false }),
+      highlightShortcut,
       Placeholder.configure({
         placeholder: t('editor.placeholder'),
       }),

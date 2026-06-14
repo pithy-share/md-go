@@ -15,6 +15,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Highlighter,
   Image as ImageIcon,
   Italic,
   Languages,
@@ -190,6 +191,9 @@ export function Toolbar({
         </button>
         <button className={markClass(editor, 'strike')} title={t('toolbar.strike')} disabled={disabled} onClick={() => editor?.chain().focus().toggleStrike().run()}>
           <Strikethrough size={17} />
+        </button>
+        <button className={markClass(editor, 'highlight')} title={t('toolbar.highlight')} disabled={disabled} onClick={() => editor?.chain().focus().toggleHighlight().run()}>
+          <Highlighter size={17} />
         </button>
         <button className={markClass(editor, 'code')} title={t('toolbar.inlineCode')} disabled={disabled} onClick={() => editor?.chain().focus().toggleCode().run()}>
           <Code size={17} />

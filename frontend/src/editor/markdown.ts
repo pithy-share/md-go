@@ -9,6 +9,32 @@ marked.use({
   gfm: true,
 });
 
+// ==highlight== → <mark>
+marked.use({
+  extensions: [
+    {
+      name: 'highlight',
+      level: 'inline',
+      start(src: string) {
+        return src.match(/==/)?.index;
+      },
+      tokenizer(src: string) {
+        const match = /^==([^=\s][^=]*[^=\s]|[^=\s])==/.exec(src);
+        if (!match) return undefined;
+        return {
+          type: 'highlight' as const,
+          raw: match[0],
+          text: match[1],
+          tokens: this.lexer.inlineTokens(match[1]),
+        };
+      },
+      renderer(token: any) {
+        return `<mark>${this.parser.parseInline(token.tokens)}</mark>`;
+      },
+    } as any,
+  ],
+});
+
 const turndown = new TurndownService({
   bulletListMarker: '-',
   codeBlockStyle: 'fenced',
@@ -77,6 +103,14 @@ turndown.addRule('inlineCodePreserve', {
       return content;
     }
     return `\`${content}\``;
+  },
+});
+
+// <mark> → ==highlight==
+turndown.addRule('highlight', {
+  filter: ['mark'],
+  replacement(content) {
+    return `==${content}==`;
   },
 });
 

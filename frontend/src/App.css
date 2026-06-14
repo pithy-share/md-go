@@ -901,6 +901,17 @@
   white-space: break-spaces;
 }
 
+.prose-editor mark {
+  background: color-mix(in srgb, #ffd54f 55%, transparent);
+  border-radius: 2px;
+  color: inherit;
+  padding: 0 2px;
+}
+
+:root[data-theme="dark"] .prose-editor mark {
+  background: color-mix(in srgb, #ffd54f 38%, transparent);
+}
+
 .prose-editor pre {
   background: var(--code-bg);
   border: 1px solid var(--border);

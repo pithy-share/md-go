@@ -860,6 +860,7 @@ function App() {
     { id: 'heading3', label: t('toolbar.heading3'), description: t('toolbar.heading3'), category: 'format', action: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), hotkeyLabel: 'Ctrl+3' },
     { id: 'link', label: t('toolbar.link'), description: t('toolbar.link'), category: 'format', action: handleLinkAction, hotkeyLabel: 'Ctrl+K' },
     { id: 'code', label: t('toolbar.inlineCode'), description: t('toolbar.inlineCode'), category: 'format', action: () => editor?.chain().focus().toggleCode().run(), hotkeyLabel: 'Ctrl+Shift+`' },
+    { id: 'highlight', label: t('command.highlight'), description: t('command.highlight'), category: 'format', action: () => editor?.chain().focus().toggleHighlight().run(), hotkeyLabel: 'Ctrl+Shift+H' },
     { id: 'bullet-list', label: t('toolbar.bulletList'), description: t('toolbar.bulletList'), category: 'format', action: () => editor?.chain().focus().toggleBulletList().run() },
     { id: 'ordered-list', label: t('toolbar.orderedList'), description: t('toolbar.orderedList'), category: 'format', action: () => editor?.chain().focus().toggleOrderedList().run() },
     { id: 'task-list', label: t('toolbar.taskList'), description: t('toolbar.taskList'), category: 'format', action: () => editor?.chain().focus().toggleTaskList().run() },
