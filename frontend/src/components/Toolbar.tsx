@@ -17,6 +17,7 @@ import {
   Heading3,
   Image as ImageIcon,
   Italic,
+  Languages,
   Link as LinkIcon,
   Keyboard,
   List,
@@ -40,7 +41,7 @@ import {
 } from 'lucide-react';
 import type { EditorMode, ThemePreference } from '../types/app';
 import { ALL_LANGUAGES } from '../editor/languages';
-import { t } from '../i18n';
+import { t, type Locale } from '../i18n';
 
 interface ToolbarProps {
   editor: Editor | null;
@@ -63,6 +64,8 @@ interface ToolbarProps {
   onToggleTheme: () => void;
   onAutoSaveChange: (enabled: boolean) => void;
   onToggleHotkeySettings: () => void;
+  locale: Locale;
+  onSwitchLocale: () => void;
 }
 
 export function Toolbar({
@@ -86,6 +89,8 @@ export function Toolbar({
   onToggleTheme,
   onAutoSaveChange,
   onToggleHotkeySettings,
+  locale,
+  onSwitchLocale,
 }: ToolbarProps) {
   const [openMenu, setOpenMenu] = useState<'code' | 'table' | null>(null);
   const toolbarRef = useRef<HTMLElement | null>(null);
@@ -307,6 +312,9 @@ export function Toolbar({
       </button>
       <button className="icon-button" title={t('toolbar.theme', { theme })} onClick={onToggleTheme}>
         {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+      </button>
+      <button className="icon-button" title={t('toolbar.language', { language: t(locale === 'zh' ? 'language.zh' : 'language.en') })} onClick={onSwitchLocale}>
+        <Languages size={18} />
       </button>
       <button className="icon-button" title={t('toolbar.hotkeys')} onClick={onToggleHotkeySettings}>
         <Keyboard size={18} />

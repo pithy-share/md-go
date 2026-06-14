@@ -14,18 +14,19 @@ interface CategoryGroup {
   items: CommandItem[];
 }
 
-const categoryDisplayNames: Record<CommandItem['category'], string> = {
-  file: t('category.file'),
-  edit: t('category.edit'),
-  view: t('category.view'),
-  tab: t('category.tab'),
-  format: t('category.format'),
-};
-
-const categoryOrder: CommandItem['category'][] = ['file', 'edit', 'format', 'view', 'tab'];
+const categoryOrder: CommandItem['category'][] = ['file', 'edit', 'format', 'view', 'tab', 'language'];
 
 export function CommandPalette({ isOpen, onClose, commands }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
+  // Built per render so labels follow the current locale (t() reads the live locale).
+  const categoryDisplayNames: Record<CommandItem['category'], string> = {
+    file: t('category.file'),
+    edit: t('category.edit'),
+    view: t('category.view'),
+    tab: t('category.tab'),
+    format: t('category.format'),
+    language: t('category.language'),
+  };
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 

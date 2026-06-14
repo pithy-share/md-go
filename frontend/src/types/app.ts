@@ -128,7 +128,7 @@ export interface CommandItem {
   id: string;
   label: string;
   description: string;
-  category: 'file' | 'edit' | 'view' | 'tab' | 'format';
+  category: 'file' | 'edit' | 'view' | 'tab' | 'format' | 'language';
   action: () => void;
   hotkeyLabel?: string;
 }

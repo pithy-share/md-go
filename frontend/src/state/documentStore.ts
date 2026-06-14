@@ -1,8 +1,6 @@
 import type { AppConfig, DocumentPayload, DocumentState, DocumentStats, EditorMode, RecentDocument, SaveResult, ThemePreference, WorkspaceSessionState } from '../types/app';
 import { t } from '../i18n';
 
-export const defaultMarkdown = t('document.defaultMarkdown');
-
 export const defaultConfig: AppConfig = {
   theme: 'system',
   autoSave: true,
@@ -161,7 +159,7 @@ export function createEmptyDocument(): DocumentState {
     id: crypto.randomUUID(),
     path: '',
     name: t('document.untitled'),
-    markdown: defaultMarkdown,
+    markdown: t('document.defaultMarkdown'),
     isDirty: false,
     locked: false,
     lastSavedAt: '',

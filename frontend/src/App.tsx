@@ -51,7 +51,7 @@ import {
   removeRecentDocument,
   isMissingPathError,
 } from './state/workspaceSession';
-import { t } from './i18n';
+import { t, getLocale, setLocale, type Locale } from './i18n';
 import { Copy } from 'lucide-react';
 import { useAppConfig } from './hooks/useAppConfig';
 import { useTabs } from './hooks/useTabs';
@@ -67,6 +67,23 @@ function App() {
   const sessionPersistenceReadyRef = useRef(false);
   const lastPersistedSessionRef = useRef('');
   const [message, setMessage] = useState(t('app.ready'));
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    let initial: Locale = 'zh';
+    try {
+      const saved = localStorage.getItem('md-go-locale');
+      if (saved === 'en' || saved === 'zh') initial = saved;
+    } catch { /* localStorage may be unavailable */ }
+    setLocale(initial);
+    return initial;
+  });
+
+  const switchLocale = useCallback((next: Locale) => {
+    if (next === getLocale()) return;
+    setLocale(next);
+    setLocaleState(next);
+    try { localStorage.setItem('md-go-locale', next); } catch { /* ignore */ }
+    setMessage(t('message.languageChanged', { language: t(next === 'zh' ? 'language.zh' : 'language.en') }));
+  }, []);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceSearchQuery, setWorkspaceSearchQuery] = useState('');
   const [workspaceSearchResults, setWorkspaceSearchResults] = useState<WorkspaceSearchResult[]>([]);
@@ -856,7 +873,10 @@ function App() {
     { id: 'close-tab', label: 'Close Tab', description: 'Close Tab', category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
     { id: 'next-tab', label: 'Next Tab', description: 'Next Tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
     { id: 'prev-tab', label: 'Previous Tab', description: 'Previous Tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length), hotkeyLabel: 'Ctrl+Shift+Tab' },
-  ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, handleOpenWorkspaceSearch, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length, config.theme]);
+    // Language
+    { id: 'language-zh', label: t('language.zh'), description: t('language.zh'), category: 'language', action: () => switchLocale('zh') },
+    { id: 'language-en', label: t('language.en'), description: t('language.en'), category: 'language', action: () => switchLocale('en') },
+  ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, handleOpenWorkspaceSearch, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length, config.theme, switchLocale, locale]);
 
   // ── Keep action dispatcher ref in sync ──
   useEffect(() => {
@@ -1058,6 +1078,8 @@ function App() {
         onToggleTheme={handleToggleTheme}
         onAutoSaveChange={handleAutoSaveChange}
         onToggleHotkeySettings={handleToggleHotkeySettings}
+        locale={locale}
+        onSwitchLocale={() => switchLocale(locale === 'zh' ? 'en' : 'zh')}
       />
       <TabBar
         tabs={tabs}
