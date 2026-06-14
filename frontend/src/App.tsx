@@ -363,43 +363,45 @@ function App() {
   }, [tabs, activeTabIndex, updateActiveTab, pushFileNav]);
 
   const handleOpenLocalFile = useCallback(async (path: string) => {
-    const existingIndex = tabs.findIndex(t => t.path === path);
+    // Always read through the backend first. payload.path is canonicalized by
+    // filepath.Clean (OS separators + real on-disk casing), and tab paths come
+    // from the same ReadDocument source. Comparing the frontend-resolved
+    // `path` (forward slashes, link casing) directly against tab paths fails
+    // to match an already-open file and opens a duplicate tab.
+    let payload: DocumentPayload;
+    try {
+      payload = await ReadDocument(path);
+    } catch (error) {
+      console.error(error);
+      setMessage(t('message.linkedFileOpenFailed', { path }));
+      return;
+    }
+
+    const existingIndex = tabs.findIndex(t => t.path === payload.path);
     if (existingIndex >= 0) {
       setActiveTabIndex(existingIndex);
-      pushFileNav(path);
+      pushFileNav(tabs[existingIndex].path);
       return;
     }
 
     const current = tabs[activeTabIndex];
     if (!current.isDirty && current.path === '' && current.markdown === createEmptyDocument().markdown) {
-      try {
-        const payload = await ReadDocument(path);
-        updateActiveTab(() => documentFromPayload(payload));
-        setShowStartPage(false);
-        pushFileNav(path);
-        if (payload.lastModified) {
-          void WatchFile(path, payload.lastModified);
-        }
-      } catch (error) {
-        console.error(error);
-        setMessage(t('message.linkedFileOpenFailed', { path }));
+      updateActiveTab(() => documentFromPayload(payload));
+      setShowStartPage(false);
+      pushFileNav(payload.path);
+      if (payload.lastModified) {
+        void WatchFile(payload.path, payload.lastModified);
       }
       return;
     }
 
-    try {
-      const payload = await ReadDocument(path);
-      const newTab = documentFromPayload(payload);
-      setTabs(prev => [...prev, newTab]);
-      setActiveTabIndex(tabs.length);
-      setShowStartPage(false);
-      pushFileNav(path);
-      if (payload.lastModified) {
-        void WatchFile(path, payload.lastModified);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage(t('message.linkedFileOpenFailed', { path }));
+    const newTab = documentFromPayload(payload);
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabIndex(tabs.length);
+    setShowStartPage(false);
+    pushFileNav(payload.path);
+    if (payload.lastModified) {
+      void WatchFile(payload.path, payload.lastModified);
     }
   }, [tabs, activeTabIndex, updateActiveTab, pushFileNav]);
 

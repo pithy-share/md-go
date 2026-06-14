@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FilePlus, FileText, Folder, FolderOpen, FolderPlus, ListTree, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, FilePlus, FileText, Folder, FolderOpen, FolderPlus, ListTree, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import type { OutlineItem, Workspace, WorkspaceFile } from '../types/app';
 import { t } from '../i18n';
 
@@ -205,6 +205,16 @@ export function Sidebar({
               disabled={!workspace || allFolderIds.length === 0}
             >
               <ChevronsUp size={14} />
+            </button>
+            <button
+              type="button"
+              className="sidebar-action-button"
+              title={t('workspace.refresh')}
+              aria-label={t('workspace.refresh')}
+              onClick={onRefreshWorkspace}
+              disabled={!workspace}
+            >
+              <RefreshCw size={14} />
             </button>
           </div>
         </div>
