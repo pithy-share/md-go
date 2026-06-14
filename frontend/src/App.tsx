@@ -42,6 +42,7 @@ import { LogPrint, OnFileDrop, OnFileDropOff, EventsOn } from '../wailsjs/runtim
 import { HotkeySettings } from './components/HotkeySettings';
 import { TabBar } from './components/TabBar';
 import { CommandPalette } from './components/CommandPalette';
+import { SettingsPanel } from './components/SettingsPanel';
 import type { CommandItem } from './types/app';
 import {
   resolveStartupWorkspacePath,
@@ -126,6 +127,7 @@ function App() {
   // ── Hotkey state ──
   const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>([]);
   const [hotkeySettingsOpen, setHotkeySettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const actionHandlersRef = useRef<Record<string, () => void>>({});
 
@@ -722,6 +724,10 @@ function App() {
     setHotkeySettingsOpen((open) => !open);
   }, []);
 
+  const handleToggleSettings = useCallback(() => {
+    setSettingsOpen((open) => !open);
+  }, []);
+
   const handleHotkeysSaved = useCallback((bindings: HotkeyBinding[]) => {
     setHotkeys(bindings);
     setHotkeySettingsOpen(false);
@@ -863,6 +869,7 @@ function App() {
     { id: 'toggle-outline', label: t('toolbar.toggleOutline'), description: t('toolbar.toggleOutline'), category: 'view', action: handleToggleOutline, hotkeyLabel: 'Ctrl+Shift+O' },
     { id: 'toggle-editor-mode', label: t('toolbar.switchSource'), description: t('toolbar.switchSource'), category: 'view', action: handleToggleEditorMode, hotkeyLabel: 'Ctrl+Shift+M' },
     { id: 'toggle-theme', label: t('toolbar.theme', { theme: config.theme }), description: t('toolbar.theme', { theme: config.theme }), category: 'view', action: handleToggleTheme },
+    { id: 'open-settings', label: t('command.openSettings'), description: t('command.openSettings'), category: 'view', action: () => setSettingsOpen(true), hotkeyLabel: 'Ctrl+,' },
     // Tab
     { id: 'close-tab', label: t('command.closeTab'), description: t('command.closeTab'), category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
     { id: 'next-tab', label: t('command.nextTab'), description: t('command.nextTab'), category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
@@ -939,6 +946,13 @@ function App() {
       if ((event.ctrlKey || event.metaKey) && event.key === 'p' && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         setCommandPaletteOpen(prev => !prev);
+        return;
+      }
+
+      // Ctrl+, → settings
+      if ((event.ctrlKey || event.metaKey) && event.key === ',' && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        setSettingsOpen(prev => !prev);
         return;
       }
 
@@ -1072,6 +1086,7 @@ function App() {
         onToggleTheme={handleToggleTheme}
         onAutoSaveChange={handleAutoSaveChange}
         onToggleHotkeySettings={handleToggleHotkeySettings}
+        onOpenSettings={handleToggleSettings}
         locale={locale}
         onSwitchLocale={() => switchLocale(locale === 'zh' ? 'en' : 'zh')}
       />
@@ -1143,6 +1158,14 @@ function App() {
       </main>
       <StatusBar path={activeTab.path} isDirty={activeTab.isDirty} lastSavedAt={activeTab.lastSavedAt} stats={stats} />
       <HotkeySettings isOpen={hotkeySettingsOpen} onClose={handleToggleHotkeySettings} onSaved={handleHotkeysSaved} />
+      <SettingsPanel
+        isOpen={settingsOpen}
+        onClose={handleToggleSettings}
+        config={config}
+        locale={locale}
+        onConfigChange={persistConfig}
+        onLocaleChange={switchLocale}
+      />
       <CommandPalette
         isOpen={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}

@@ -41,6 +41,10 @@ export function useAppConfig({ currentWorkspacePath, onMessage }: UseAppConfigOp
   }, [effectiveTheme]);
 
   useEffect(() => {
+    document.documentElement.style.setProperty('--editor-font-size', `${config.editorFontSize}px`);
+  }, [config.editorFontSize]);
+
+  useEffect(() => {
     let frameId = 0;
     const setHeight = () => {
       cancelAnimationFrame(frameId);

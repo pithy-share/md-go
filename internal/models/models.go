@@ -74,6 +74,7 @@ type AppConfig struct {
 	ShowSidebar          bool                             `json:"showSidebar"`
 	ShowOutline          bool                             `json:"showOutline"`
 	EditorMode           string                           `json:"editorMode"`
+	EditorFontSize       int                              `json:"editorFontSize"`
 	WorkspacePath        string                           `json:"workspacePath"`
 	OpenTabPaths         []string                         `json:"openTabPaths"`
 	ActiveTabPath        string                           `json:"activeTabPath"`

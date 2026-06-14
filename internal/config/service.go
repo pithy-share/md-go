@@ -37,6 +37,7 @@ func DefaultConfig() models.AppConfig {
 		ShowSidebar:          true,
 		ShowOutline:          true,
 		EditorMode:           "rendered",
+		EditorFontSize:       16,
 		WorkspacePath:        "",
 		OpenTabPaths:         []string{},
 		ActiveTabPath:        "",
@@ -166,6 +167,9 @@ func normalizeConfig(config models.AppConfig) models.AppConfig {
 	}
 	if config.EditorMode != "source" && config.EditorMode != "rendered" {
 		config.EditorMode = "rendered"
+	}
+	if config.EditorFontSize < 10 || config.EditorFontSize > 32 {
+		config.EditorFontSize = 16
 	}
 	if strings.TrimSpace(config.WorkspacePath) != "" {
 		config.WorkspacePath = filepath.Clean(config.WorkspacePath)

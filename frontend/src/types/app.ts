@@ -67,6 +67,7 @@ export interface AppConfig {
   showSidebar: boolean;
   showOutline: boolean;
   editorMode: EditorMode;
+  editorFontSize: number;
   workspacePath: string;
   openTabPaths: string[];
   activeTabPath: string;

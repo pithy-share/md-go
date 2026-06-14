@@ -33,6 +33,7 @@ import {
   Rows3,
   Save,
   SaveAll,
+  Settings,
   Strikethrough,
   Sun,
   Table2,
@@ -64,6 +65,7 @@ interface ToolbarProps {
   onToggleTheme: () => void;
   onAutoSaveChange: (enabled: boolean) => void;
   onToggleHotkeySettings: () => void;
+  onOpenSettings: () => void;
   locale: Locale;
   onSwitchLocale: () => void;
 }
@@ -89,6 +91,7 @@ export function Toolbar({
   onToggleTheme,
   onAutoSaveChange,
   onToggleHotkeySettings,
+  onOpenSettings,
   locale,
   onSwitchLocale,
 }: ToolbarProps) {
@@ -318,6 +321,9 @@ export function Toolbar({
       </button>
       <button className="icon-button" title={t('toolbar.hotkeys')} onClick={onToggleHotkeySettings}>
         <Keyboard size={18} />
+      </button>
+      <button className="icon-button" title={t('toolbar.settings')} onClick={onOpenSettings}>
+        <Settings size={18} />
       </button>
     </header>
   );
