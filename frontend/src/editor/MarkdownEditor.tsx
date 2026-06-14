@@ -326,8 +326,14 @@ const MarkdownImage = Image.extend({
 
 function cleanLocalPath(href: string): string {
   // Strip file:// protocol, query params, and hash fragments
-  const cleaned = href.replace(/^file:\/\/+/i, '').replace(/[?#].*$/, '');
-  return cleaned.trim();
+  const cleaned = href.replace(/^file:\/\/+/i, '').replace(/[?#].*$/, '').trim();
+  // Browsers percent-encode non-ASCII in href attributes (e.g. 中文 → %E7%AC%94),
+  // so decode here so local paths with Chinese/space names resolve to real files.
+  try {
+    return decodeURIComponent(cleaned);
+  } catch {
+    return cleaned;
+  }
 }
 
 function isLocalMdFile(href: string): boolean {

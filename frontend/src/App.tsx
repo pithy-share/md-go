@@ -52,6 +52,7 @@ import {
   isMissingPathError,
 } from './state/workspaceSession';
 import { t } from './i18n';
+import { Copy } from 'lucide-react';
 import { useAppConfig } from './hooks/useAppConfig';
 import { useTabs } from './hooks/useTabs';
 
@@ -1141,7 +1142,18 @@ function App() {
         onClose={() => setWorkspaceSearchOpen(false)}
         onOpenResult={handleOpenSearchResult}
       />
-      <div className="toast" role="status" aria-live="polite">{message}</div>
+      <div className="toast" role="status" aria-live="polite">
+        <span className="toast-message">{message}</span>
+        <button
+          type="button"
+          className="toast-copy"
+          title={t('toast.copy')}
+          aria-label={t('toast.copy')}
+          onClick={() => navigator.clipboard?.writeText(message).catch(() => {})}
+        >
+          <Copy size={13} />
+        </button>
+      </div>
     </div>
   );
 }

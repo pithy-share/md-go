@@ -85,6 +85,7 @@ const zh = {
   'search.openFolderFirst': '请先打开文件夹。',
   'search.noMatches': '没有匹配结果',
   'search.line': '第 {line} 行',
+  'toast.copy': '复制提示信息',
   'command.placeholder': '输入命令...',
   'command.empty': '没有匹配命令',
   'category.file': '文件',

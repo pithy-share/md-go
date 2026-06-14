@@ -1166,13 +1166,40 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
   color: var(--muted);
   font-size: 12px;
-  max-width: 320px;
-  overflow: hidden;
-  padding: 7px 10px;
+  max-width: 360px;
+  padding: 6px 8px;
   position: fixed;
   right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toast-message {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.toast-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toast-copy:hover {
+  background: var(--hover-bg, rgba(0, 0, 0, 0.06));
+  color: var(--text, inherit);
 }
 
 @media (max-width: 920px) {
