@@ -29,6 +29,7 @@ import { InsertLinkPopover } from './InsertLinkPopover';
 import { SearchBar } from './SearchBar';
 import { createSearchPlugin, findMatches, findMatchesInDoc, searchPluginKey, type SearchResult } from './searchPlugin';
 import type { OutlineItem } from '../types/app';
+import { t } from '../i18n';
 
 async function handleImageInsert(
   file: File,
@@ -498,7 +499,7 @@ export function MarkdownEditor({ markdown, documentPath, onChange, onOutlineChan
       }),
       Typography,
       Placeholder.configure({
-        placeholder: 'Start writing...',
+        placeholder: t('editor.placeholder'),
       }),
     ],
     content: markdownToHtml(markdown, documentPath),

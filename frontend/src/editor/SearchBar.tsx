@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { ArrowUp, ArrowDown, Replace, ReplaceAll, X } from 'lucide-react';
+import { t } from '../i18n';
 
 interface SearchBarProps {
   query: string;
@@ -71,7 +72,7 @@ export function SearchBar({
             ref={inputRef}
             type="text"
             className="search-input"
-            placeholder="Find..."
+            placeholder={t('find.placeholder')}
             value={query}
             onChange={(event) => onQueryChange(event.currentTarget.value)}
             spellCheck={false}
@@ -82,25 +83,25 @@ export function SearchBar({
             </span>
           )}
           {totalMatches === 0 && query !== '' && (
-            <span className="search-match-count search-no-matches">No results</span>
+            <span className="search-match-count search-no-matches">{t('find.noResults')}</span>
           )}
         </div>
         <div className="search-nav-buttons">
-          <button className="search-nav-btn" title="Previous match (Shift+Enter)" onClick={onPrev} disabled={totalMatches === 0}>
+          <button className="search-nav-btn" title={t('find.previousMatch')} onClick={onPrev} disabled={totalMatches === 0}>
             <ArrowUp size={14} />
           </button>
-          <button className="search-nav-btn" title="Next match (Enter)" onClick={onNext} disabled={totalMatches === 0}>
+          <button className="search-nav-btn" title={t('find.nextMatch')} onClick={onNext} disabled={totalMatches === 0}>
             <ArrowDown size={14} />
           </button>
         </div>
         <button
           className={`search-toggle-replace ${showReplace ? 'active' : ''}`}
-          title="Toggle replace"
+          title={t('find.toggleReplace')}
           onClick={onToggleReplace}
         >
           <ReplaceAll size={14} />
         </button>
-        <button className="search-close-btn" title="Close (Esc)" onClick={onClose}>
+        <button className="search-close-btn" title={t('find.close')} onClick={onClose}>
           <X size={14} />
         </button>
       </div>
@@ -110,17 +111,17 @@ export function SearchBar({
             <input
               type="text"
               className="search-input search-replace-input"
-              placeholder="Replace..."
+              placeholder={t('find.replacePlaceholder')}
               value={replaceText}
               onChange={(event) => onReplaceTextChange(event.currentTarget.value)}
               spellCheck={false}
             />
           </div>
           <div className="search-nav-buttons">
-            <button className="search-nav-btn" title="Replace" onClick={onReplace} disabled={totalMatches === 0}>
+            <button className="search-nav-btn" title={t('find.replace')} onClick={onReplace} disabled={totalMatches === 0}>
               <Replace size={14} />
             </button>
-            <button className="search-nav-btn" title="Replace All" onClick={onReplaceAll} disabled={totalMatches === 0}>
+            <button className="search-nav-btn" title={t('find.replaceAll')} onClick={onReplaceAll} disabled={totalMatches === 0}>
               <ReplaceAll size={14} />
             </button>
           </div>

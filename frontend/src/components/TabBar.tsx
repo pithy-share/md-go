@@ -1,6 +1,7 @@
 import { Circle, Lock, Plus, X } from 'lucide-react';
 import type { DocumentState } from '../types/app';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { t } from '../i18n';
 
 interface TabBarProps {
   tabs: DocumentState[];
@@ -134,7 +135,7 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
                 e.stopPropagation();
                 onToggleLock(i);
               }}
-              title="已锁定 — 点击解锁"
+              title={t('tab.lockedClickToUnlock')}
             >
               <Lock size={10} />
             </button>
@@ -146,7 +147,7 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
                   e.stopPropagation();
                   onCloseTab(i);
                 }}
-                title="Close tab"
+                title={t('tab.closeTab')}
               >
                 <X size={12} />
               </button>
@@ -154,7 +155,7 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
           )}
         </div>
       ))}
-      <button className="tab-new-btn" onClick={onNewTab} title="New tab">
+      <button className="tab-new-btn" onClick={onNewTab} title={t('tab.newTab')}>
         <Plus size={14} />
       </button>
 
@@ -168,33 +169,33 @@ export function TabBar({ tabs, activeTabIndex, onSelectTab, onCloseTab, onNewTab
             disabled={tabs[contextMenu.index]?.locked}
             onClick={() => executeMenuAction(() => onCloseTab(contextMenu.index))}
           >
-            关闭
+            {t('tab.close')}
           </button>
           <button
             className="tab-context-menu-item"
             onClick={() => executeMenuAction(() => onToggleLock(contextMenu.index))}
           >
-            {tabs[contextMenu.index]?.locked ? '解锁' : '锁定'}
+            {tabs[contextMenu.index]?.locked ? t('tab.unlock') : t('tab.lock')}
           </button>
           <button
             className="tab-context-menu-item"
             onClick={() => executeMenuAction(onCloseAll)}
           >
-            关闭所有
+            {t('tab.closeAll')}
           </button>
           <button
             className="tab-context-menu-item"
             disabled={contextMenu.index >= tabs.length - 1}
             onClick={() => executeMenuAction(() => onCloseRight(contextMenu.index))}
           >
-            关闭右侧
+            {t('tab.closeRight')}
           </button>
           <button
             className="tab-context-menu-item"
             disabled={contextMenu.index === 0}
             onClick={() => executeMenuAction(() => onCloseLeft(contextMenu.index))}
           >
-            关闭左侧
+            {t('tab.closeLeft')}
           </button>
         </div>
       )}

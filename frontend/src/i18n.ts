@@ -155,6 +155,29 @@ const zh = {
   'confirm.unsavedTab': '"{name}" 有未保存更改。要放弃更改吗？',
   'confirm.unsavedTabs': '{count} 个标签页有未保存更改。要放弃更改吗？',
   'confirm.externalChange': '"{name}" 已被外部修改。\n\n要重新加载吗？未保存更改将丢失。',
+  'editor.placeholder': '开始书写...',
+  'find.placeholder': '查找...',
+  'find.noResults': '无结果',
+  'find.previousMatch': '上一个匹配 (Shift+Enter)',
+  'find.nextMatch': '下一个匹配 (Enter)',
+  'find.toggleReplace': '切换替换',
+  'find.close': '关闭 (Esc)',
+  'find.replacePlaceholder': '替换...',
+  'find.replace': '替换',
+  'find.replaceAll': '全部替换',
+  'tab.lockedClickToUnlock': '已锁定 — 点击解锁',
+  'tab.closeTab': '关闭标签页',
+  'tab.newTab': '新建标签页',
+  'tab.close': '关闭',
+  'tab.unlock': '解锁',
+  'tab.lock': '锁定',
+  'tab.closeAll': '关闭所有',
+  'tab.closeRight': '关闭右侧',
+  'tab.closeLeft': '关闭左侧',
+  'command.find': '查找',
+  'command.closeTab': '关闭标签页',
+  'command.nextTab': '下一个标签页',
+  'command.prevTab': '上一个标签页',
   'toast.copy': '复制提示信息',
 } as const;
 
@@ -311,6 +334,29 @@ const en: Record<keyof typeof zh, string> = {
   'confirm.unsavedTab': '"{name}" has unsaved changes. Discard changes?',
   'confirm.unsavedTabs': '{count} tab(s) have unsaved changes. Discard changes?',
   'confirm.externalChange': '"{name}" has been modified externally.\n\nReload it? Unsaved changes will be lost.',
+  'editor.placeholder': 'Start writing...',
+  'find.placeholder': 'Find...',
+  'find.noResults': 'No results',
+  'find.previousMatch': 'Previous match (Shift+Enter)',
+  'find.nextMatch': 'Next match (Enter)',
+  'find.toggleReplace': 'Toggle replace',
+  'find.close': 'Close (Esc)',
+  'find.replacePlaceholder': 'Replace...',
+  'find.replace': 'Replace',
+  'find.replaceAll': 'Replace All',
+  'tab.lockedClickToUnlock': 'Locked — click to unlock',
+  'tab.closeTab': 'Close tab',
+  'tab.newTab': 'New tab',
+  'tab.close': 'Close',
+  'tab.unlock': 'Unlock',
+  'tab.lock': 'Lock',
+  'tab.closeAll': 'Close all',
+  'tab.closeRight': 'Close to the right',
+  'tab.closeLeft': 'Close to the left',
+  'command.find': 'Find',
+  'command.closeTab': 'Close Tab',
+  'command.nextTab': 'Next Tab',
+  'command.prevTab': 'Previous Tab',
   'toast.copy': 'Copy message',
 };
 
@@ -321,7 +367,17 @@ const dictionaries: Record<Locale, Record<Key, string>> = {
   en,
 };
 
-let currentLocale: Locale = 'zh';
+function readInitialLocale(): Locale {
+  try {
+    const saved = localStorage.getItem('md-go-locale');
+    if (saved === 'en' || saved === 'zh') return saved;
+  } catch { /* localStorage may be unavailable */ }
+  return 'zh';
+}
+
+// Initialize from the persisted preference at module load so the very first
+// render (e.g. the "ready" toast) already reflects the user's chosen language.
+let currentLocale: Locale = readInitialLocale();
 
 export function getLocale(): Locale {
   return currentLocale;

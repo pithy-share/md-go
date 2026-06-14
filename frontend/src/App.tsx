@@ -67,15 +67,9 @@ function App() {
   const sessionPersistenceReadyRef = useRef(false);
   const lastPersistedSessionRef = useRef('');
   const [message, setMessage] = useState(t('app.ready'));
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    let initial: Locale = 'zh';
-    try {
-      const saved = localStorage.getItem('md-go-locale');
-      if (saved === 'en' || saved === 'zh') initial = saved;
-    } catch { /* localStorage may be unavailable */ }
-    setLocale(initial);
-    return initial;
-  });
+  // currentLocale is initialized from localStorage at i18n module load, so this
+  // just mirrors it into React state for re-rendering on switch.
+  const [locale, setLocaleState] = useState<Locale>(() => getLocale());
 
   const switchLocale = useCallback((next: Locale) => {
     if (next === getLocale()) return;
@@ -848,7 +842,7 @@ function App() {
     { id: 'export-html', label: t('toolbar.exportHtml'), description: t('toolbar.exportHtml'), category: 'file', action: handleExport, hotkeyLabel: 'Ctrl+Shift+E' },
     { id: 'export-pdf', label: t('toolbar.exportPdf'), description: t('toolbar.exportPdf'), category: 'file', action: handleExportPdf, hotkeyLabel: 'Ctrl+Shift+P' },
     // Edit
-    { id: 'find', label: 'Find', description: 'Find', category: 'edit', action: handleFindAction, hotkeyLabel: 'Ctrl+F' },
+    { id: 'find', label: t('command.find'), description: t('command.find'), category: 'edit', action: handleFindAction, hotkeyLabel: 'Ctrl+F' },
     { id: 'workspace-search', label: t('start.searchWorkspace'), description: t('start.searchWorkspace'), category: 'edit', action: handleOpenWorkspaceSearch, hotkeyLabel: 'Ctrl+Shift+F' },
     // Format
     { id: 'bold', label: t('toolbar.bold'), description: t('toolbar.bold'), category: 'format', action: () => editor?.chain().focus().toggleBold().run(), hotkeyLabel: 'Ctrl+B' },
@@ -870,9 +864,9 @@ function App() {
     { id: 'toggle-editor-mode', label: t('toolbar.switchSource'), description: t('toolbar.switchSource'), category: 'view', action: handleToggleEditorMode, hotkeyLabel: 'Ctrl+Shift+M' },
     { id: 'toggle-theme', label: t('toolbar.theme', { theme: config.theme }), description: t('toolbar.theme', { theme: config.theme }), category: 'view', action: handleToggleTheme },
     // Tab
-    { id: 'close-tab', label: 'Close Tab', description: 'Close Tab', category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
-    { id: 'next-tab', label: 'Next Tab', description: 'Next Tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
-    { id: 'prev-tab', label: 'Previous Tab', description: 'Previous Tab', category: 'tab', action: () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length), hotkeyLabel: 'Ctrl+Shift+Tab' },
+    { id: 'close-tab', label: t('command.closeTab'), description: t('command.closeTab'), category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
+    { id: 'next-tab', label: t('command.nextTab'), description: t('command.nextTab'), category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
+    { id: 'prev-tab', label: t('command.prevTab'), description: t('command.prevTab'), category: 'tab', action: () => setActiveTabIndex(prev => (prev - 1 + tabs.length) % tabs.length), hotkeyLabel: 'Ctrl+Shift+Tab' },
     // Language
     { id: 'language-zh', label: t('language.zh'), description: t('language.zh'), category: 'language', action: () => switchLocale('zh') },
     { id: 'language-en', label: t('language.en'), description: t('language.en'), category: 'language', action: () => switchLocale('en') },
