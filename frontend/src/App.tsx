@@ -411,6 +411,10 @@ function App() {
   };
 
   const handleSave = useCallback(async () => {
+    if (config.readOnly) {
+      setMessage(t('message.readOnlySaveBlocked'));
+      return;
+    }
     try {
       if (activeTab.path) {
         const result = await saveToPath(activeTab.path, activeTab.markdown);
@@ -428,9 +432,13 @@ function App() {
       console.error(error);
       setMessage(t('message.saveFailed'));
     }
-  }, [activeTab.markdown, activeTab.path, saveToPath, updateActiveTab]);
+  }, [config.readOnly, activeTab.markdown, activeTab.path, saveToPath, updateActiveTab]);
 
   const handleSaveAs = useCallback(async () => {
+    if (config.readOnly) {
+      setMessage(t('message.readOnlySaveBlocked'));
+      return;
+    }
     try {
       const result: SaveResult = await SaveDocumentAs(activeTab.markdown);
       if (!result?.path) return;
@@ -441,7 +449,7 @@ function App() {
       console.error(error);
       setMessage(t('message.saveAsFailed'));
     }
-  }, [activeTab.markdown, updateActiveTab]);
+  }, [config.readOnly, activeTab.markdown, updateActiveTab]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -515,6 +523,13 @@ function App() {
     const next: EditorMode = config.editorMode === 'rendered' ? 'source' : 'rendered';
     setConfig((current) => ({ ...current, editorMode: next }));
     void persistConfig({ editorMode: next });
+  }, [config, persistConfig]);
+
+  const handleToggleReadOnly = useCallback(() => {
+    const next = !config.readOnly;
+    setConfig((current) => ({ ...current, readOnly: next }));
+    void persistConfig({ readOnly: next });
+    setMessage(t(next ? 'message.readOnlyOn' : 'message.readOnlyOff'));
   }, [config, persistConfig]);
 
   const handleToggleTheme = useCallback(() => {
@@ -871,6 +886,7 @@ function App() {
     { id: 'toggle-sidebar', label: t('toolbar.toggleSidebar'), description: t('toolbar.toggleSidebar'), category: 'view', action: handleToggleSidebar, hotkeyLabel: 'Ctrl+Shift+B' },
     { id: 'toggle-outline', label: t('toolbar.toggleOutline'), description: t('toolbar.toggleOutline'), category: 'view', action: handleToggleOutline, hotkeyLabel: 'Ctrl+Shift+O' },
     { id: 'toggle-editor-mode', label: t('toolbar.switchSource'), description: t('toolbar.switchSource'), category: 'view', action: handleToggleEditorMode, hotkeyLabel: 'Ctrl+Shift+M' },
+    { id: 'toggle-read-only', label: config.readOnly ? t('toolbar.exitReadOnly') : t('toolbar.enterReadOnly'), description: t('toolbar.enterReadOnly'), category: 'view', action: handleToggleReadOnly },
     { id: 'toggle-theme', label: t('toolbar.theme', { theme: config.theme }), description: t('toolbar.theme', { theme: config.theme }), category: 'view', action: handleToggleTheme },
     { id: 'open-settings', label: t('command.openSettings'), description: t('command.openSettings'), category: 'view', action: () => setSettingsOpen(true), hotkeyLabel: 'Ctrl+,' },
     // Tab
@@ -880,7 +896,7 @@ function App() {
     // Language
     { id: 'language-zh', label: t('language.zh'), description: t('language.zh'), category: 'language', action: () => switchLocale('zh') },
     { id: 'language-en', label: t('language.en'), description: t('language.en'), category: 'language', action: () => switchLocale('en') },
-  ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, handleOpenWorkspaceSearch, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length, config.theme, switchLocale, locale]);
+  ], [handleNew, handleOpen, handleSave, handleSaveAs, handleOpenFolder, handleExport, handleExportPdf, handleFindAction, handleOpenWorkspaceSearch, editor, handleLinkAction, handleToggleSidebar, handleToggleOutline, handleToggleEditorMode, handleToggleReadOnly, handleToggleTheme, handleCloseTab, activeTabIndex, tabs.length, config.theme, config.readOnly, switchLocale, locale]);
 
   // ── Keep action dispatcher ref in sync ──
   useEffect(() => {
@@ -986,7 +1002,7 @@ function App() {
   }, [hotkeys, tabs.length]);
 
   useEffect(() => {
-    if (!config.autoSave || !activeTab.isDirty || !activeTab.path) return;
+    if (config.readOnly || !config.autoSave || !activeTab.isDirty || !activeTab.path) return;
     const timeout = window.setTimeout(() => {
       void saveToPath(activeTab.path, activeTab.markdown).then(result => {
         updateActiveTab(current => documentAfterSave(current, result));
@@ -997,7 +1013,7 @@ function App() {
       });
     }, config.autoSaveDelay);
     return () => window.clearTimeout(timeout);
-  }, [config.autoSave, config.autoSaveDelay, activeTab.isDirty, activeTab.markdown, activeTab.path, saveToPath, updateActiveTab]);
+  }, [config.readOnly, config.autoSave, config.autoSaveDelay, activeTab.isDirty, activeTab.markdown, activeTab.path, saveToPath, updateActiveTab]);
 
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
@@ -1074,6 +1090,7 @@ function App() {
         sidebarVisible={config.showSidebar}
         outlineVisible={config.showOutline}
         editorMode={config.editorMode}
+        readOnly={config.readOnly}
         autoSave={config.autoSave}
         isDirty={activeTab.isDirty}
         onNew={handleNew}
@@ -1086,6 +1103,7 @@ function App() {
         onToggleSidebar={handleToggleSidebar}
         onToggleOutline={handleToggleOutline}
         onToggleEditorMode={handleToggleEditorMode}
+        onToggleReadOnly={handleToggleReadOnly}
         onToggleTheme={handleToggleTheme}
         onAutoSaveChange={handleAutoSaveChange}
         onToggleHotkeySettings={handleToggleHotkeySettings}
@@ -1140,6 +1158,7 @@ function App() {
               key={`source-${activeTab.id}`}
               markdown={activeTab.markdown}
               documentPath={activeTab.path}
+              readOnly={config.readOnly}
               onChange={handleMarkdownChange}
               onOutlineChange={setOutline}
               onEditorReady={setEditor}
@@ -1150,6 +1169,7 @@ function App() {
               key={`wysiwyg-${activeTab.id}`}
               markdown={activeTab.markdown}
               documentPath={activeTab.path}
+              readOnly={config.readOnly}
               onChange={handleMarkdownChange}
               onOutlineChange={setOutline}
               onEditorReady={setEditor}

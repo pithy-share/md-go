@@ -9,6 +9,7 @@ import {
   Columns3,
   Copy,
   Download,
+  Eye,
   FilePlus2,
   FileText,
   FolderOpen,
@@ -29,6 +30,7 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  PencilLine,
   Quote,
   Redo2,
   Rows3,
@@ -51,6 +53,7 @@ interface ToolbarProps {
   sidebarVisible: boolean;
   outlineVisible: boolean;
   editorMode: EditorMode;
+  readOnly: boolean;
   autoSave: boolean;
   isDirty: boolean;
   onNew: () => void;
@@ -63,6 +66,7 @@ interface ToolbarProps {
   onToggleSidebar: () => void;
   onToggleOutline: () => void;
   onToggleEditorMode: () => void;
+  onToggleReadOnly: () => void;
   onToggleTheme: () => void;
   onAutoSaveChange: (enabled: boolean) => void;
   onToggleHotkeySettings: () => void;
@@ -77,6 +81,7 @@ export function Toolbar({
   sidebarVisible,
   outlineVisible,
   editorMode,
+  readOnly,
   autoSave,
   isDirty,
   onNew,
@@ -89,6 +94,7 @@ export function Toolbar({
   onToggleSidebar,
   onToggleOutline,
   onToggleEditorMode,
+  onToggleReadOnly,
   onToggleTheme,
   onAutoSaveChange,
   onToggleHotkeySettings,
@@ -98,7 +104,7 @@ export function Toolbar({
 }: ToolbarProps) {
   const [openMenu, setOpenMenu] = useState<'code' | 'table' | null>(null);
   const toolbarRef = useRef<HTMLElement | null>(null);
-  const disabled = !editor;
+  const disabled = !editor || readOnly;
   const currentLinkHref = getCurrentLinkHref(editor);
 
   useEffect(() => {
@@ -166,10 +172,10 @@ export function Toolbar({
         <button className="icon-button" title={t('toolbar.openFolder')} onClick={onOpenFolder}>
           <FolderOpen size={18} />
         </button>
-        <button className={`icon-button ${isDirty ? 'attention' : ''}`} title={t('toolbar.save')} onClick={onSave}>
+        <button className={`icon-button ${isDirty ? 'attention' : ''}`} title={t('toolbar.save')} disabled={readOnly} onClick={onSave}>
           <Save size={18} />
         </button>
-        <button className="icon-button" title={t('toolbar.saveAs')} onClick={onSaveAs}>
+        <button className="icon-button" title={t('toolbar.saveAs')} disabled={readOnly} onClick={onSaveAs}>
           <SaveAll size={18} />
         </button>
         <button className="icon-button" title={t('toolbar.exportHtml')} onClick={onExport}>
@@ -313,6 +319,9 @@ export function Toolbar({
       </label>
       <button className="icon-button" title={editorMode === 'source' ? t('toolbar.switchRendered') : t('toolbar.switchSource')} onClick={onToggleEditorMode}>
         {editorMode === 'source' ? <FileText size={18} /> : <Code2 size={18} />}
+      </button>
+      <button className={`icon-button ${readOnly ? 'active' : ''}`} title={readOnly ? t('toolbar.exitReadOnly') : t('toolbar.enterReadOnly')} onClick={onToggleReadOnly}>
+        {readOnly ? <PencilLine size={18} /> : <Eye size={18} />}
       </button>
       <button className="icon-button" title={t('toolbar.toggleOutline')} onClick={onToggleOutline}>
         {outlineVisible ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />}

@@ -71,6 +71,7 @@ export namespace models {
 	    showSidebar: boolean;
 	    showOutline: boolean;
 	    editorMode: string;
+	    readOnly: boolean;
 	    editorFontSize: number;
 	    workspacePath: string;
 	    openTabPaths: string[];
@@ -92,6 +93,7 @@ export namespace models {
 	        this.showSidebar = source["showSidebar"];
 	        this.showOutline = source["showOutline"];
 	        this.editorMode = source["editorMode"];
+	        this.readOnly = source["readOnly"];
 	        this.editorFontSize = source["editorFontSize"];
 	        this.workspacePath = source["workspacePath"];
 	        this.openTabPaths = source["openTabPaths"];

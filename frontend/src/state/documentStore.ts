@@ -8,6 +8,7 @@ export const defaultConfig: AppConfig = {
   showSidebar: true,
   showOutline: true,
   editorMode: 'rendered',
+  readOnly: false,
   editorFontSize: 16,
   workspacePath: '',
   openTabPaths: [],
@@ -31,6 +32,7 @@ export function normalizeConfig(input: ConfigInput | null | undefined): AppConfi
   const autoSaveDelay = input?.autoSaveDelay && input.autoSaveDelay > 0 ? input.autoSaveDelay : defaultConfig.autoSaveDelay;
   const showOutline = typeof input?.showOutline === 'boolean' ? input.showOutline : defaultConfig.showOutline;
   const editorMode = normalizeEditorMode(input?.editorMode);
+  const readOnly = typeof input?.readOnly === 'boolean' ? input.readOnly : defaultConfig.readOnly;
   const editorFontSize = typeof input?.editorFontSize === 'number' && input.editorFontSize >= 10 && input.editorFontSize <= 32 ? input.editorFontSize : defaultConfig.editorFontSize;
   const workspacePath = typeof input?.workspacePath === 'string' ? input.workspacePath.trim() : defaultConfig.workspacePath;
   const openTabPaths = normalizeOpenTabPaths((input as Partial<AppConfig> | undefined)?.openTabPaths);
@@ -47,6 +49,7 @@ export function normalizeConfig(input: ConfigInput | null | undefined): AppConfi
     autoSaveDelay,
     showOutline,
     editorMode,
+    readOnly,
     editorFontSize,
     workspacePath,
     openTabPaths,
