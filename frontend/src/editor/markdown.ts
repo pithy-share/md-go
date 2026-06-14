@@ -114,8 +114,31 @@ turndown.addRule('highlight', {
   },
 });
 
+// turndown defensively escapes a leading "N." (e.g. "## 1. 目标" → "## 1\. 目标")
+// so the line can't be misread as an ordered-list item. But a heading is
+// unambiguously a heading — "## 1. 目标" can never become a list — so strip
+// that escaping and keep the heading text readable.
+turndown.addRule('heading', {
+  filter: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+  replacement(content, node) {
+    const level = Number(node.nodeName.charAt(1));
+    const text = content.trim().replace(/^(\d+)\\\./, '$1.');
+    return `\n\n${'#'.repeat(level)} ${text}\n\n`;
+  },
+});
+
+// Split a leading YAML (`---`) or TOML (`+++`) front-matter block from the
+// body so it can be preserved verbatim. Without this the leading fence is
+// parsed as a thematic break / setext heading and the metadata is destroyed.
+export function splitFrontmatter(markdown: string): { frontmatter: string; body: string } {
+  const match = /^([+-]{3})\r?\n([\s\S]*?)\r?\n\1\r?\n?/.exec(markdown);
+  if (!match) return { frontmatter: '', body: markdown };
+  return { frontmatter: match[0], body: markdown.slice(match[0].length) };
+}
+
 export function markdownToHtml(markdown: string, documentPath = ''): string {
-  const source = markdown.trim().length > 0 ? markdown : '# Untitled\n\n';
+  const { body } = splitFrontmatter(markdown);
+  const source = body.trim().length > 0 ? body : '# Untitled\n\n';
   const html = marked.parse(source);
   if (typeof html !== 'string') return '';
   return prepareEditorHtml(html, documentPath);
@@ -357,10 +380,30 @@ function findDirectChild(element: Element, tagName: string): HTMLElement | null 
 }
 
 function normalizeMarkdown(markdown: string): string {
-  return markdown
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .trimEnd() + '\n';
+  return collapseTightLists(
+    markdown
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/[ \t]+\n/g, '\n'),
+  ).trimEnd() + '\n';
+}
+
+// marked wraps every list item's text in <p>, so turndown treats the whole
+// list as "loose" and re-emits a blank line between items even when the source
+// was a tight list. Drop those blank lines so a tight list round-trips as
+// tight. A multi-paragraph item keeps its spacing (its continuation line is
+// indented prose, not a list marker), and fenced code blocks are skipped
+// verbatim so their contents are never touched.
+function collapseTightLists(markdown: string): string {
+  const parts = markdown.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g);
+  return parts
+    .map((part, index) => {
+      if (index % 2 === 1) return part;
+      return part.replace(
+        /(^[ \t]*(?:[-*+]|\d+\.) +[^\n]*\n)(\n+)(?=^[ \t]*(?:[-*+]|\d+\.) +)/gm,
+        '$1',
+      );
+    })
+    .join('');
 }
 
 function escapeHtml(value: string): string {
