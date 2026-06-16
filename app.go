@@ -10,6 +10,8 @@ import (
 	"md-go/internal/models"
 )
 
+const Version = "v0.0.2"
+
 // App is the Wails binding surface exposed to the frontend.
 type App struct {
 	ctx context.Context
@@ -152,6 +154,10 @@ func (a *App) WatchFile(path string, lastModified string) {
 // UnwatchFile removes a file from external modification monitoring.
 func (a *App) UnwatchFile(path string) {
 	a.files.UnwatchFile(path)
+}
+
+func (a *App) GetVersion() string {
+	return Version
 }
 
 func (a *App) SaveImageFile(documentPath string, imageData []byte, imageName string) (models.SaveImageResult, error) {

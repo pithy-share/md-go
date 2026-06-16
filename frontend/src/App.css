@@ -2366,3 +2366,85 @@
     padding: 32px 24px;
   }
 }
+
+/* ================================
+   About panel
+   ================================ */
+
+.about-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  max-height: min(400px, calc(100vh - 80px));
+  max-width: 380px;
+  width: 100%;
+}
+
+.about-panel-header {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  font-size: 14px;
+  font-weight: 650;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.about-close-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  width: 28px;
+}
+
+.about-close-btn:hover {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.about-panel-body {
+  flex: 1;
+  padding: 28px 32px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.about-logo {
+  margin-bottom: 8px;
+}
+
+.about-app-name {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+
+.about-version-line {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 4px 0;
+}
+
+.about-description {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 8px 0 0;
+  max-width: 280px;
+}

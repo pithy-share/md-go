@@ -16,6 +16,8 @@ export function ExportPDF(arg1:models.ExportPdfPayload):Promise<models.SaveResul
 
 export function GetRecentDocuments():Promise<Array<models.RecentDocument>>;
 
+export function GetVersion():Promise<string>;
+
 export function LoadConfig():Promise<models.AppConfig>;
 
 export function LoadHotkeys():Promise<Array<models.HotkeyBinding>>;

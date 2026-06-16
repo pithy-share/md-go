@@ -18,6 +18,7 @@ import {
   Heading3,
   Highlighter,
   Image as ImageIcon,
+  Info,
   Italic,
   Languages,
   Link as LinkIcon,
@@ -71,6 +72,7 @@ interface ToolbarProps {
   onAutoSaveChange: (enabled: boolean) => void;
   onToggleHotkeySettings: () => void;
   onOpenSettings: () => void;
+  onOpenAbout: () => void;
   locale: Locale;
   onSwitchLocale: () => void;
 }
@@ -99,6 +101,7 @@ export function Toolbar({
   onAutoSaveChange,
   onToggleHotkeySettings,
   onOpenSettings,
+  onOpenAbout,
   locale,
   onSwitchLocale,
 }: ToolbarProps) {
@@ -334,6 +337,9 @@ export function Toolbar({
       </button>
       <button className="icon-button" title={t('toolbar.hotkeys')} onClick={onToggleHotkeySettings}>
         <Keyboard size={18} />
+      </button>
+      <button className="icon-button" title={t('about.about')} onClick={onOpenAbout}>
+        <Info size={18} />
       </button>
       <button className="icon-button" title={t('toolbar.settings')} onClick={onOpenSettings}>
         <Settings size={18} />

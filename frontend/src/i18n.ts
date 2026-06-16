@@ -204,6 +204,10 @@ const zh = {
   'settings.autoSaveDelay': '自动保存延迟（毫秒）',
   'toolbar.settings': '设置',
   'command.openSettings': '打开设置',
+  'about.title': '关于 MD Go',
+  'about.version': '版本',
+  'about.description': '轻量、原生、中文友好的桌面 Markdown 工作区。',
+  'about.about': '关于',
   'toast.copy': '复制提示信息',
 } as const;
 
@@ -409,6 +413,10 @@ const en: Record<keyof typeof zh, string> = {
   'settings.autoSaveDelay': 'Auto save delay (ms)',
   'toolbar.settings': 'Settings',
   'command.openSettings': 'Open Settings',
+  'about.title': 'About MD Go',
+  'about.version': 'Version',
+  'about.description': 'A lightweight, native, Chinese-friendly desktop Markdown workspace.',
+  'about.about': 'About',
   'toast.copy': 'Copy message',
 };
 

@@ -30,6 +30,10 @@ export function GetRecentDocuments() {
   return window['go']['main']['App']['GetRecentDocuments']();
 }
 
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
+}
+
 export function LoadConfig() {
   return window['go']['main']['App']['LoadConfig']();
 }

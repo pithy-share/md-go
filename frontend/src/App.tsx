@@ -23,6 +23,7 @@ import {
   CreateWorkspaceFolder,
   DeleteWorkspaceItem,
   ExportHTML,
+  GetVersion,
   MoveWorkspaceItem,
   ExportPDF,
   LoadConfig,
@@ -43,6 +44,7 @@ import { HotkeySettings } from './components/HotkeySettings';
 import { TabBar } from './components/TabBar';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsPanel } from './components/SettingsPanel';
+import { AboutPanel } from './components/AboutPanel';
 import type { CommandItem } from './types/app';
 import {
   resolveStartupWorkspacePath,
@@ -128,6 +130,8 @@ function App() {
   const [hotkeys, setHotkeys] = useState<HotkeyBinding[]>([]);
   const [hotkeySettingsOpen, setHotkeySettingsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutVersion, setAboutVersion] = useState('');
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const actionHandlersRef = useRef<Record<string, () => void>>({});
 
@@ -745,6 +749,10 @@ function App() {
     setSettingsOpen((open) => !open);
   }, []);
 
+  const handleToggleAbout = useCallback(() => {
+    setAboutOpen((open) => !open);
+  }, []);
+
   const handleHotkeysSaved = useCallback((bindings: HotkeyBinding[]) => {
     setHotkeys(bindings);
     setHotkeySettingsOpen(false);
@@ -784,6 +792,13 @@ function App() {
         if (bindings) setHotkeys(bindings);
       })
       .catch(console.error);
+  }, []);
+
+  // ── Fetch version from backend ──
+  useEffect(() => {
+    GetVersion()
+      .then(setAboutVersion)
+      .catch(() => setAboutVersion('v0.0.2'));
   }, []);
 
   useEffect(() => {
@@ -889,6 +904,7 @@ function App() {
     { id: 'toggle-read-only', label: config.readOnly ? t('toolbar.exitReadOnly') : t('toolbar.enterReadOnly'), description: t('toolbar.enterReadOnly'), category: 'view', action: handleToggleReadOnly },
     { id: 'toggle-theme', label: t('toolbar.theme', { theme: config.theme }), description: t('toolbar.theme', { theme: config.theme }), category: 'view', action: handleToggleTheme },
     { id: 'open-settings', label: t('command.openSettings'), description: t('command.openSettings'), category: 'view', action: () => setSettingsOpen(true), hotkeyLabel: 'Ctrl+,' },
+    { id: 'about', label: t('about.about'), description: t('about.about'), category: 'view', action: () => setAboutOpen(true) },
     // Tab
     { id: 'close-tab', label: t('command.closeTab'), description: t('command.closeTab'), category: 'tab', action: () => handleCloseTab(activeTabIndex), hotkeyLabel: 'Ctrl+W' },
     { id: 'next-tab', label: t('command.nextTab'), description: t('command.nextTab'), category: 'tab', action: () => setActiveTabIndex(prev => (prev + 1) % tabs.length), hotkeyLabel: 'Ctrl+Tab' },
@@ -1108,6 +1124,7 @@ function App() {
         onAutoSaveChange={handleAutoSaveChange}
         onToggleHotkeySettings={handleToggleHotkeySettings}
         onOpenSettings={handleToggleSettings}
+        onOpenAbout={handleToggleAbout}
         locale={locale}
         onSwitchLocale={() => switchLocale(locale === 'zh' ? 'en' : 'zh')}
       />
@@ -1181,6 +1198,12 @@ function App() {
       </main>
       <StatusBar path={activeTab.path} isDirty={activeTab.isDirty} lastSavedAt={activeTab.lastSavedAt} stats={stats} />
       <HotkeySettings isOpen={hotkeySettingsOpen} onClose={handleToggleHotkeySettings} onSaved={handleHotkeysSaved} />
+      <AboutPanel
+        isOpen={aboutOpen}
+        onClose={handleToggleAbout}
+        version={aboutVersion}
+        locale={locale}
+      />
       <SettingsPanel
         isOpen={settingsOpen}
         onClose={handleToggleSettings}
