@@ -461,7 +461,11 @@ func (s *Service) WatchFile(path string, lastModified string) {
 	if err == nil {
 		modTime = info.ModTime()
 	} else {
+		// File doesn't exist; use lastModified as fallback, or skip entirely
 		modTime, _ = time.Parse(time.RFC3339, lastModified)
+		if modTime.IsZero() {
+			return // file doesn't exist and no valid timestamp — nothing to watch
+		}
 	}
 
 	hash, _ := fileHash(path)

@@ -905,10 +905,10 @@ export function MarkdownEditor({ markdown, documentPath, readOnly, onChange, onO
       .insertContent(replaceText)
       .run();
 
-    // Recalculate matches
+    // Recalculate matches and reset to first match
     const newMatches = findMatchesInDoc(editor.state.doc, searchQuery);
     setSearchMatches(newMatches);
-    setCurrentMatchIndex(Math.min(currentMatchIndex, newMatches.length - 1));
+    setCurrentMatchIndex(0);
     editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: newMatches, activeIndex: 0 }));
   }, [editor, searchMatches, currentMatchIndex, replaceText, searchQuery]);
 
@@ -922,8 +922,10 @@ export function MarkdownEditor({ markdown, documentPath, readOnly, onChange, onO
     }
     editor.view.dispatch(tr);
 
+    // Clear search state after replace all
     setSearchMatches([]);
     setCurrentMatchIndex(0);
+    editor.view.dispatch(editor.state.tr.setMeta(searchPluginKey, { matches: [], activeIndex: 0 }));
   }, [editor, searchMatches, replaceText]);
 
   const handleCloseSearch = useCallback(() => {
